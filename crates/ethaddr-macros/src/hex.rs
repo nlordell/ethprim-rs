@@ -1,1 +1,1 @@
-../../ethaddr/src/hex.rs
+../../shared/src/hex.rs

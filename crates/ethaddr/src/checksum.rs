@@ -1,12 +1,12 @@
 //! Checksummed formatting for Ethereum public addresses.
 
-use crate::buffer::{self, Alphabet, FormattingBuffer};
+use crate::hex::{self, Alphabet, FormattingBuffer};
 use core::str;
 use sha3::{Digest as _, Keccak256};
 
 /// Format address bytes with EIP-55 checksum.
-pub fn fmt(bytes: &[u8; 20]) -> FormattingBuffer {
-    let mut buffer = buffer::fmt(bytes, Alphabet::Lower);
+pub fn fmt(bytes: &[u8; 20]) -> FormattingBuffer<42> {
+    let mut buffer = hex::encode(bytes, Alphabet::Lower);
 
     // SAFETY: We only ever change lowercase ASCII characters to upper case
     // characters, so the buffer remains valid UTF-8 bytes.
@@ -24,7 +24,7 @@ pub fn fmt(bytes: &[u8; 20]) -> FormattingBuffer {
 }
 
 /// Verifies an address checksum.
-pub fn verify(bytes: &[u8; 20], checksum: &str) -> Result<(), FormattingBuffer> {
+pub fn verify(bytes: &[u8; 20], checksum: &str) -> Result<(), FormattingBuffer<42>> {
     let expected = fmt(bytes);
     if checksum.strip_prefix("0x").unwrap_or(checksum) != expected.as_bytes_str() {
         return Err(expected);

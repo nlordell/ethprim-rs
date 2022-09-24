@@ -26,15 +26,13 @@
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
-mod buffer;
 #[cfg(feature = "checksum")]
 mod checksum;
 mod hex;
 #[cfg(feature = "serde")]
 mod serde;
 
-use crate::buffer::{Alphabet, FormattingBuffer};
-pub use crate::hex::ParseAddressError;
+use crate::hex::{Alphabet, FormattingBuffer, ParseHexError};
 use core::{
     array::{IntoIter, TryFromSliceError},
     fmt::{self, Debug, Display, Formatter, LowerHex, UpperHex},
@@ -152,15 +150,20 @@ impl Address {
         Ok(Self(bytes))
     }
 
+    /// Returns a stack-allocated formatted string with the specified alphabet.
+    fn fmt_buffer(&self, alphabet: Alphabet) -> FormattingBuffer<42> {
+        hex::encode(self, alphabet)
+    }
+
     /// Default formatting method for an address.
-    fn fmt(&self) -> FormattingBuffer {
+    fn fmt(&self) -> FormattingBuffer<42> {
         #[cfg(feature = "checksum")]
         {
             checksum::fmt(self)
         }
         #[cfg(not(feature = "checksum"))]
         {
-            buffer::fmt(self, Alphabet::Lower)
+            self.fmt_buffer(Alphabet::Lower)
         }
     }
 }
@@ -181,7 +184,7 @@ impl Display for Address {
 
 impl LowerHex for Address {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let buffer = buffer::fmt(self, Alphabet::Lower);
+        let buffer = self.fmt_buffer(Alphabet::Lower);
         f.pad(if f.alternate() {
             buffer.as_str()
         } else {
@@ -192,7 +195,7 @@ impl LowerHex for Address {
 
 impl UpperHex for Address {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let buffer = buffer::fmt(self, Alphabet::Upper);
+        let buffer = self.fmt_buffer(Alphabet::Upper);
         f.pad(if f.alternate() {
             buffer.as_str()
         } else {
@@ -243,7 +246,7 @@ impl FromStr for Address {
     type Err = ParseAddressError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::decode(s).map(Self)
+        Ok(Self(hex::decode(s)?))
     }
 }
 
@@ -336,6 +339,49 @@ impl TryFrom<Vec<u8>> for Address {
         Ok(Self(value.try_into()?))
     }
 }
+
+/// Represents an error parsing an address from a string.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ParseAddressError {
+    /// The string does not have the correct length.
+    InvalidLength,
+    /// An invalid character was found.
+    InvalidHexCharacter { c: char, index: usize },
+    /// The checksum encoded in the hex string's case does not match the
+    /// address.
+    #[cfg(feature = "checksum")]
+    ChecksumMismatch,
+}
+
+impl Display for ParseAddressError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidLength => write!(f, "{}", ParseHexError::InvalidLength),
+            Self::InvalidHexCharacter { c, index } => {
+                let (c, index) = (*c, *index);
+                write!(f, "{}", ParseHexError::InvalidHexCharacter { c, index })
+            }
+            #[cfg(feature = "checksum")]
+            Self::ChecksumMismatch => {
+                write!(f, "address checksum does not match")
+            }
+        }
+    }
+}
+
+impl From<ParseHexError> for ParseAddressError {
+    fn from(err: ParseHexError) -> Self {
+        match err {
+            ParseHexError::InvalidLength => Self::InvalidLength,
+            ParseHexError::InvalidHexCharacter { c, index } => {
+                Self::InvalidHexCharacter { c, index }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseAddressError {}
 
 #[cfg(test)]
 mod tests {

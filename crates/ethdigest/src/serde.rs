@@ -1,9 +1,6 @@
 //! Serde serialization implementation for Ethereum 32-byte digests.
 
-use crate::{
-    buffer::{self, Alphabet},
-    Digest,
-};
+use crate::Digest;
 use core::fmt::{self, Formatter};
 use serde::{
     de::{self, Deserializer, Visitor},
@@ -45,7 +42,7 @@ impl Serialize for Digest {
     where
         S: Serializer,
     {
-        let buffer = buffer::fmt(self, Alphabet::default());
+        let buffer = self.fmt_buffer(Default::default());
         serializer.serialize_str(buffer.as_str())
     }
 }

@@ -19,15 +19,13 @@
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
-mod buffer;
 mod hex;
 #[cfg(feature = "keccak")]
 mod keccak;
 #[cfg(feature = "serde")]
 mod serde;
 
-use crate::buffer::Alphabet;
-pub use crate::hex::ParseDigestError;
+use crate::hex::{Alphabet, FormattingBuffer, ParseHexError};
 #[cfg(feature = "keccak")]
 pub use crate::keccak::Keccak;
 use core::{
@@ -164,6 +162,11 @@ impl Digest {
         hasher.update(data);
         hasher.finalize()
     }
+
+    /// Returns a stack-allocated formatted string with the specified alphabet.
+    fn fmt_buffer(&self, alphabet: Alphabet) -> FormattingBuffer<66> {
+        hex::encode(self, alphabet)
+    }
 }
 
 impl Debug for Digest {
@@ -176,13 +179,13 @@ impl Debug for Digest {
 
 impl Display for Digest {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.pad(buffer::fmt(self, Alphabet::default()).as_str())
+        f.pad(self.fmt_buffer(Alphabet::default()).as_str())
     }
 }
 
 impl LowerHex for Digest {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let buffer = buffer::fmt(self, Alphabet::Lower);
+        let buffer = self.fmt_buffer(Alphabet::default());
         f.pad(if f.alternate() {
             buffer.as_str()
         } else {
@@ -193,7 +196,7 @@ impl LowerHex for Digest {
 
 impl UpperHex for Digest {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let buffer = buffer::fmt(self, Alphabet::Upper);
+        let buffer = hex::encode::<32, 66>(self, Alphabet::Upper);
         f.pad(if f.alternate() {
             buffer.as_str()
         } else {
@@ -244,7 +247,7 @@ impl FromStr for Digest {
     type Err = ParseDigestError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::decode(s).map(Self)
+        Ok(Self(hex::decode(s)?))
     }
 }
 
@@ -337,6 +340,41 @@ impl TryFrom<Vec<u8>> for Digest {
         Ok(Self(value.try_into()?))
     }
 }
+
+/// Represents an error parsing a digest from a string.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ParseDigestError {
+    /// The string does not have the correct length.
+    InvalidLength,
+    /// An invalid character was found.
+    InvalidHexCharacter { c: char, index: usize },
+}
+
+impl Display for ParseDigestError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidLength => write!(f, "{}", ParseHexError::InvalidLength),
+            Self::InvalidHexCharacter { c, index } => {
+                let (c, index) = (*c, *index);
+                write!(f, "{}", ParseHexError::InvalidHexCharacter { c, index })
+            }
+        }
+    }
+}
+
+impl From<ParseHexError> for ParseDigestError {
+    fn from(err: ParseHexError) -> Self {
+        match err {
+            ParseHexError::InvalidLength => Self::InvalidLength,
+            ParseHexError::InvalidHexCharacter { c, index } => {
+                Self::InvalidHexCharacter { c, index }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseDigestError {}
 
 #[cfg(test)]
 mod tests {

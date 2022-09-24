@@ -1,7 +1,5 @@
 //! Internal module used for hex-string parsing.
 
-#![allow(dead_code)]
-
 use core::{
     fmt::{self, Display, Formatter},
     mem::MaybeUninit,
@@ -74,6 +72,7 @@ impl<const N: usize> FormattingBuffer<N> {
     ///
     /// The caller must guarantee that the contents of the buffer is a valid
     /// UTF-8 string.
+    #[allow(dead_code)]
     pub unsafe fn as_bytes_mut(&mut self) -> &mut [u8; N] {
         &mut self.0
     }
@@ -129,6 +128,3 @@ impl Display for ParseHexError {
         }
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for ParseHexError {}

@@ -6,6 +6,7 @@
 
 extern crate proc_macro;
 
+#[allow(dead_code)]
 mod hex;
 
 use proc_macro::{Delimiter, Literal, Span, TokenStream, TokenTree};
