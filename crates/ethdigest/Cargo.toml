@@ -1,0 +1,27 @@
+[package]
+name = "ethdigest"
+version = "0.2.0"
+authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
+edition = "2021"
+description = "Ethereum digests and hashing"
+documentation = "https://docs.rs/ethdigest"
+readme = "README.md"
+homepage = "https://github.com/nlordell/ethdigest-rs"
+repository = "https://github.com/nlordell/ethdigest-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["digest", "ethereum", "hash", "keccak"]
+categories = ["cryptography::cryptocurrencies", "no-std"]
+
+[package.metadata.docs.rs]
+features = ["std", "keccak", "macros", "serde"]
+
+[features]
+default = ["std"]
+keccak = ["sha3"]
+macros = ["ethdigest-macros"]
+std = ["serde?/std", "sha3?/std"]
+
+[dependencies]
+ethdigest-macros = { version = "0.2.0", path = "../ethdigest-macros", optional = true }
+serde = { version = "1", default-features = false, optional = true }
+sha3 = { version = "0.10", default-features = false, optional = true }

@@ -1,0 +1,26 @@
+[package]
+name = "ethrpc"
+version = "0.0.1"
+edition = "2021"
+
+[features]
+http = ["reqwest", "url", "tracing"]
+ws = []
+
+[dependencies]
+ethaddr = { version = "0.1", features = ["serde"] }
+ethdigest = { version = "0.2", features = ["serde"] }
+ethnum = { version = "1", features = ["serde"] }
+reqwest = { version = "0.11", features = ["json", "native-tls"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tracing = { version = "0.1", optional = true }
+url = { version = "2", optional = true }
+
+[dev-dependencies]
+ethaddr = { version = "0.1", features = ["macros"] }
+ethdigest = { version = "0.2", features = ["macros"] }
+ethnum = { version = "1", features = ["macros"] }
+tokio = { version = "1", features = ["macros"] }
+hex-literal = "0.3"
