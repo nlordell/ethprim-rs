@@ -1,7 +1,16 @@
 [package]
 name = "ethrpc"
 version = "0.0.1"
+authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
 edition = "2021"
+description = "Ethereum transport-agnositic JSON RPC implementation"
+documentation = "https://docs.rs/ethrpc"
+readme = "README.md"
+homepage = "https://github.com/nlordell/ethcrates-rs/tree/main/crates/ethrpc"
+repository = "https://github.com/nlordell/ethcrates-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["json", "rpc", "ethereum"]
+categories = ["cryptography::cryptocurrencies"]
 
 [features]
 http = ["reqwest", "url", "tracing"]
