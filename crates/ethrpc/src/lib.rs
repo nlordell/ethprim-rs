@@ -11,9 +11,6 @@ pub mod types;
 #[cfg(feature = "http")]
 pub use url;
 
-#[cfg(feature = "ws")]
-compile_error!("Ethereum RPC WebSocket support is currently not implemented");
-
 module! {
     /// The `web3` namespace.
     pub mod web3 {
