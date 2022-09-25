@@ -20,7 +20,7 @@ pub fn address(input: TokenStream) -> TokenStream {
     }
 }
 
-struct AddressLiteral([u8; 20]);
+struct AddressLiteral([u8; 20], String);
 
 impl AddressLiteral {
     fn generate(input: TokenStream) -> Result<Self, CompileError> {
@@ -47,12 +47,12 @@ impl AddressLiteral {
             })?;
         }
 
-        Ok(Self(bytes))
+        Ok(Self(bytes, input.crate_name))
     }
 
     fn into_tokens(self) -> TokenStream {
         let mut buf = String::new();
-        write!(buf, "::ethaddr::Address(*b\"").unwrap();
+        write!(buf, "{}::Address(*b\"", self.1).unwrap();
         for byte in self.0 {
             write!(buf, "\\x{byte:02x}").unwrap();
         }
@@ -66,6 +66,7 @@ struct Input {
     checksum: bool,
     value: String,
     span: Span,
+    crate_name: String,
 }
 
 impl Input {
@@ -74,6 +75,7 @@ impl Input {
             checksum: true,
             value: String::new(),
             span: Span::call_site(),
+            crate_name: "::ethaddr".to_string(),
         };
         ParserState::start().input(input, &mut result)?.end()?;
 
@@ -84,6 +86,10 @@ impl Input {
 enum ParserState {
     TildeOrString,
     String,
+    CommaOrEof,
+    Crate,
+    EqualCrateName,
+    CrateName,
     Eof,
 }
 
@@ -117,6 +123,21 @@ impl ParserState {
                 Some(value) => {
                     result.value = value;
                     result.span = token.span();
+                    Ok(Self::CommaOrEof)
+                }
+                None => Err(self.unexpected(Some(token))),
+            },
+
+            (Self::CommaOrEof, TokenTree::Punct(p)) if p.as_char() == ',' => Ok(Self::Crate),
+            (Self::Crate, TokenTree::Ident(c)) if c.to_string() == "crate" => {
+                Ok(Self::EqualCrateName)
+            }
+            (Self::EqualCrateName, TokenTree::Punct(p)) if p.as_char() == '=' => {
+                Ok(Self::CrateName)
+            }
+            (Self::CrateName, TokenTree::Literal(l)) => match parse_string(l) {
+                Some(value) => {
+                    result.crate_name = value;
                     Ok(Self::Eof)
                 }
                 None => Err(self.unexpected(Some(token))),
@@ -128,16 +149,20 @@ impl ParserState {
 
     fn end(self) -> Result<(), CompileError> {
         match self {
-            ParserState::Eof => Ok(()),
+            Self::CommaOrEof | Self::Eof => Ok(()),
             _ => Err(self.unexpected(None)),
         }
     }
 
     fn unexpected(self, token: Option<TokenTree>) -> CompileError {
         let expected = match self {
-            ParserState::TildeOrString => "`~` or string literal",
-            ParserState::String => "string literal",
-            ParserState::Eof => "<eof>",
+            Self::TildeOrString => "`~` or string literal",
+            Self::String => "string literal",
+            Self::CommaOrEof => "`,` or <eof>",
+            Self::Crate => "`crate` identifier",
+            Self::EqualCrateName => "`=`",
+            Self::CrateName => "crate name string literal",
+            Self::Eof => "<eof>",
         };
         let (value, span) = match token {
             Some(TokenTree::Group(g)) => {

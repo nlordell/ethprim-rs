@@ -18,13 +18,14 @@ jobs:
     - name: Lint
       run: |
         cargo fmt --all -- --check
-        cargo clippy --all-targets --workspace -- -D warnings
-        cargo test --workspace
-    - name: All Features
-      run: |
         cargo clippy --all-features --all-targets --workspace -- -D warnings
         cargo test --all-features --workspace
     - name: No Features
       run: |
-        cargo clippy --no-default-features --all-targets --workspace -- -D warnings
-        cargo test --no-default-features --workspace
+        for crate in crates/*
+        do
+          pushd $crate
+          cargo clippy --no-default-features --all-targets -- -D warnings
+          cargo test --no-default-features
+          popd
+        done

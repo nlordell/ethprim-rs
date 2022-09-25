@@ -73,7 +73,30 @@ use core::{
 /// let _ = address!(~"0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 /// ```
 #[cfg(feature = "macros")]
-pub use ethaddr_macros::address;
+#[macro_export]
+macro_rules! address {
+    ($address:literal) => {{
+        use $crate::internal;
+        internal::address!($address, crate = "internal")
+    }};
+    (~$address:literal) => {{
+        use $crate::internal;
+        internal::address!(~$address, crate = "internal")
+    }};
+}
+
+/// Module containing required re-exports for macros.
+///
+/// This "trick" allows us to export declarative macros that wrap the inner
+/// procedural macro implementations, without requiring the `ethaddr` crate to
+/// be available in the invocation context. This means that the macros continue
+/// to work even when the crate is renamed, or the macro is re-exported.
+#[cfg(feature = "macros")]
+#[doc(hidden)]
+pub mod internal {
+    pub use super::Address;
+    pub use ethaddr_macros::address;
+}
 
 /// An Ethereum public address.
 #[repr(transparent)]

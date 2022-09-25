@@ -29,7 +29,7 @@ pub fn keccak(input: TokenStream) -> TokenStream {
     }
 }
 
-struct DigestLiteral([u8; 32]);
+struct DigestLiteral([u8; 32], String);
 
 impl DigestLiteral {
     fn generate_digest(input: TokenStream) -> Result<Self, CompileError> {
@@ -43,7 +43,7 @@ impl DigestLiteral {
             span: Some(input.span),
         })?;
 
-        Ok(Self(bytes))
+        Ok(Self(bytes, input.crate_name))
     }
 
     fn generate_keccak(input: TokenStream) -> Result<Self, CompileError> {
@@ -52,12 +52,12 @@ impl DigestLiteral {
         let mut hasher = Keccak256::new();
         hasher.update(&input.value);
 
-        Ok(Self(hasher.finalize().into()))
+        Ok(Self(hasher.finalize().into(), input.crate_name))
     }
 
     fn into_tokens(self) -> TokenStream {
         let mut buf = String::new();
-        write!(buf, "::ethdigest::Digest(*b\"").unwrap();
+        write!(buf, "{}::Digest(*b\"", self.1).unwrap();
         for byte in self.0 {
             write!(buf, "\\x{byte:02x}").unwrap();
         }
@@ -70,6 +70,7 @@ impl DigestLiteral {
 struct Input {
     value: String,
     span: Span,
+    crate_name: String,
 }
 
 impl Input {
@@ -77,6 +78,7 @@ impl Input {
         let mut result = Input {
             value: String::new(),
             span: Span::call_site(),
+            crate_name: "::ethdigest".to_string(),
         };
         ParserState::start().input(input, &mut result)?.end()?;
 
@@ -86,6 +88,10 @@ impl Input {
 
 enum ParserState {
     String,
+    CommaOrEof,
+    Crate,
+    EqualCrateName,
+    CrateName,
     Eof,
 }
 
@@ -115,6 +121,21 @@ impl ParserState {
                 Some(value) => {
                     result.value = value;
                     result.span = token.span();
+                    Ok(Self::CommaOrEof)
+                }
+                None => Err(self.unexpected(Some(token))),
+            },
+
+            (Self::CommaOrEof, TokenTree::Punct(p)) if p.as_char() == ',' => Ok(Self::Crate),
+            (Self::Crate, TokenTree::Ident(c)) if c.to_string() == "crate" => {
+                Ok(Self::EqualCrateName)
+            }
+            (Self::EqualCrateName, TokenTree::Punct(p)) if p.as_char() == '=' => {
+                Ok(Self::CrateName)
+            }
+            (Self::CrateName, TokenTree::Literal(l)) => match parse_string(l) {
+                Some(value) => {
+                    result.crate_name = value;
                     Ok(Self::Eof)
                 }
                 None => Err(self.unexpected(Some(token))),
@@ -126,15 +147,19 @@ impl ParserState {
 
     fn end(self) -> Result<(), CompileError> {
         match self {
-            ParserState::Eof => Ok(()),
+            Self::CommaOrEof | Self::Eof => Ok(()),
             _ => Err(self.unexpected(None)),
         }
     }
 
     fn unexpected(self, token: Option<TokenTree>) -> CompileError {
         let expected = match self {
-            ParserState::String => "string literal",
-            ParserState::Eof => "<eof>",
+            Self::String => "string literal",
+            Self::CommaOrEof => "`,` or <eof>",
+            Self::Crate => "`crate` identifier",
+            Self::EqualCrateName => "`=`",
+            Self::CrateName => "crate name string literal",
+            Self::Eof => "<eof>",
         };
         let (value, span) = match token {
             Some(TokenTree::Group(g)) => {

@@ -143,8 +143,7 @@ mod tests {
         types::{BlockId, TransactionCall},
         web3,
     };
-    use ethaddr::address;
-    use ethdigest::Digest;
+    use ethprim::{address, Digest};
     use hex_literal::hex;
 
     #[tokio::test]

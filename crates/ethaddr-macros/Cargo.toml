@@ -1,6 +1,6 @@
 [package]
 name = "ethaddr-macros"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
 edition = "2021"
 description = "Ethereum public address literals"
@@ -16,4 +16,4 @@ categories = ["cryptography::cryptocurrencies"]
 proc-macro = true
 
 [dependencies]
-sha3 = { version = "0.10", default-features = false }
+sha3 = { workspace = true }

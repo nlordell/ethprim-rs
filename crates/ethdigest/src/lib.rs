@@ -11,8 +11,8 @@
 //! [`ParseDigestError`] and conversions from `Vec<u8>`.
 //! - **`keccak`**: Include Keccak-256 hasing utilities (provided by the
 //! [`sha3`] crate).
-//! - **`macros`**: Adds a [`digest`] procedural macro for compile-time
-//! digest literals and a [`keccak`] procedural macro for compile-time hashing.
+//! - **`macros`**: Adds a [`digest!`] procedural macro for compile-time
+//! digest literals and a [`keccak!`] procedural macro for compile-time hashing.
 //! - **`serde`**: Serialization traits for the [`serde`](::serde) crate. Note
 //! that the implementation is very much geared towards JSON serialiazation with
 //! `serde_json`.
@@ -61,7 +61,13 @@ use core::{
 /// let _ = digest!("not a valid hex digest literal!");
 /// ```
 #[cfg(feature = "macros")]
-pub use ethdigest_macros::digest;
+#[macro_export]
+macro_rules! digest {
+    ($digest:literal) => {{
+        use $crate::internal;
+        internal::digest!($digest, crate = "internal")
+    }};
+}
 
 /// Procedural macro to create Ethereum digest values from compile-time hashed
 /// input.
@@ -78,7 +84,26 @@ pub use ethdigest_macros::digest;
 /// );
 /// ```
 #[cfg(feature = "macros")]
-pub use ethdigest_macros::keccak;
+#[macro_export]
+macro_rules! keccak {
+    ($data:literal) => {{
+        use $crate::internal;
+        internal::keccak!($data, crate = "internal")
+    }};
+}
+
+/// Module containing required re-exports for macros.
+///
+/// This "trick" allows us to export declarative macros that wrap the inner
+/// procedural macro implementations, without requiring the `ethdigest` crate to
+/// be available in the invocation context. This means that the macros continue
+/// to work even when the crate is renamed, or the macro is re-exported.
+#[cfg(feature = "macros")]
+#[doc(hidden)]
+pub mod internal {
+    pub use super::{Digest, Keccak};
+    pub use ethdigest_macros::{digest, keccak};
+}
 
 /// A 32-byte digest.
 #[repr(transparent)]

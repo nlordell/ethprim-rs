@@ -12,23 +12,22 @@ license = "MIT OR Apache-2.0"
 keywords = ["json", "rpc", "ethereum"]
 categories = ["cryptography::cryptocurrencies"]
 
+[package.metadata.docs.rs]
+features = ["http"]
+
 [features]
 http = ["reqwest", "url", "tracing"]
 
 [dependencies]
-ethaddr = { version = "0.1", features = ["serde"] }
-ethdigest = { version = "0.2", features = ["serde"] }
-ethnum = { version = "1", features = ["serde"] }
+ethprim = { version = "0.0.1", path = "../ethprim", features = ["serde"] }
 reqwest = { version = "0.11", features = ["json", "native-tls"], optional = true }
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 tracing = { version = "0.1", optional = true }
 url = { version = "2", optional = true }
 
 [dev-dependencies]
-ethaddr = { version = "0.1", features = ["macros"] }
-ethdigest = { version = "0.2", features = ["macros"] }
-ethnum = { version = "1", features = ["macros"] }
+ethprim = { version = "0.0.1", path = "../ethprim", features = ["macros"] }
 tokio = { version = "1", features = ["macros"] }
 hex-literal = "0.3"

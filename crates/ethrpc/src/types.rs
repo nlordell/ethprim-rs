@@ -3,7 +3,7 @@
 pub mod internal;
 
 use crate::serialization;
-use ethnum::AsU256 as _;
+use ethprim::AsU256 as _;
 use serde::{
     de::{self, Deserializer},
     ser::{SerializeSeq as _, Serializer},
@@ -11,9 +11,7 @@ use serde::{
 };
 use std::collections::HashMap;
 
-pub use ethaddr::Address;
-pub use ethdigest::Digest;
-pub use ethnum::{I256, U256};
+pub use ethprim::{Address, Digest, I256, U256};
 
 /// Empty JSON RPC parameters.
 pub struct Empty;
