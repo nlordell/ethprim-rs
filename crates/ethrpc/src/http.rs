@@ -63,8 +63,6 @@ impl Client {
         R: DeserializeOwned,
     {
         let request = serde_json::to_string(&request)?;
-        tracing::trace!(%request, "starting RPC call");
-
         let response = self
             .client
             .post(self.url.clone())
@@ -75,7 +73,6 @@ impl Client {
 
         let status = response.status();
         let body = response.text().await?;
-        tracing::trace!(%status, response = %body, "completed RPC call");
 
         if !status.is_success() {
             return Err(ClientError::Status(status, body));

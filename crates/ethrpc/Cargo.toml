@@ -16,17 +16,16 @@ categories = ["cryptography::cryptocurrencies"]
 features = ["http"]
 
 [features]
-http = ["reqwest", "tracing"]
+http = ["reqwest"]
 
 [dependencies]
-ethprim = { version = "0.1.0", path = "../ethprim", features = ["serde"] }
+ethprim = { version = "0.1", path = "../ethprim", features = ["serde"] }
 reqwest = { version = "0.11", features = ["json", "native-tls"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
-tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
-ethprim = { version = "0.1.0", path = "../ethprim", features = ["macros"] }
+ethprim = { version = "*", path = "../ethprim", features = ["macros"] }
 tokio = { version = "1", features = ["macros"] }
 hex-literal = "0.3"
