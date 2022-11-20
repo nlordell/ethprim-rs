@@ -1,6 +1,6 @@
 [package]
 name = "ethprim"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
 edition = "2021"
 description = "Ethereum primitive type meta-crate"
@@ -16,12 +16,13 @@ categories = ["cryptography::cryptocurrencies", "no-std"]
 features = ["serde", "std", "macros"]
 
 [features]
-default = ["std"]
+default = ["keccak", "std"]
+keccak = ["ethaddr/checksum", "ethdigest/keccak"]
 macros = ["ethaddr/macros", "ethdigest/macros", "ethnum/macros"]
 serde = ["ethaddr/serde", "ethdigest/serde", "ethnum/serde"]
 std = ["ethaddr/std", "ethdigest/std"]
 
 [dependencies]
-ethaddr = { version = "0.1", path = "../ethaddr", default-features = false, features = ["checksum"] }
-ethdigest = { version = "0.2", path = "../ethdigest", default-features = false, features = ["keccak"] }
-ethnum = { version = "1", features = ["serde"] }
+ethaddr = { version = "0.1", path = "../ethaddr", default-features = false }
+ethdigest = { version = "0.2", path = "../ethdigest", default-features = false }
+ethnum = "1"
