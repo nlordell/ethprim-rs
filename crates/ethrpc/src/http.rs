@@ -64,7 +64,7 @@ impl Client {
         R: DeserializeOwned,
     {
         let request = serde_json::to_string(&request)?;
-        tracing::debug!(%request, "starting RPC call");
+        tracing::trace!(%request, "starting RPC call");
 
         let response = self
             .client
@@ -76,7 +76,7 @@ impl Client {
 
         let status = response.status();
         let body = response.text().await?;
-        tracing::debug!(%status, response = %body, "completed RPC call");
+        tracing::trace!(%status, response = %body, "completed RPC call");
 
         if !status.is_success() {
             return Err(ClientError::Status(status, body));
@@ -86,14 +86,13 @@ impl Client {
         Ok(result)
     }
 
-    /// Performs a JSON RPC call.
-    pub async fn call<P, R>(&self, method: &str, params: P) -> Result<R, ClientError>
+    /// Executes a JSON RPC method.
+    pub async fn execute<M>(&self, method: M, params: M::Params) -> Result<M::Result, ClientError>
     where
-        P: Serialize,
-        R: DeserializeOwned,
+        M: Method + Serialize,
     {
         Ok(self
-            .roundtrip::<_, Response<R>>(Request {
+            .roundtrip::<_, Response<M>>(Request {
                 jsonrpc: Version::V2,
                 method,
                 params,
@@ -103,22 +102,12 @@ impl Client {
             .result?)
     }
 
-    /// Executes a JSON RPC method.
-    pub async fn execute<M>(&self, params: M::Params) -> Result<M::Result, ClientError>
-    where
-        M: Method,
-    {
-        self.call(M::name(), M::ParamsAs::from(params))
-            .await
-            .map(M::ResultAs::into)
-    }
-
     /// Executes a JSON RPC method with empty parameters.
-    pub async fn execute_empty<M>(&self) -> Result<M::Result, ClientError>
+    pub async fn execute_empty<M>(&self, method: M) -> Result<M::Result, ClientError>
     where
-        M: Method<Params = Empty>,
+        M: Method<Params = Empty> + Serialize,
     {
-        self.execute::<M>(Empty).await
+        self.execute::<M>(method, Empty).await
     }
 }
 
@@ -150,7 +139,7 @@ mod tests {
     #[ignore]
     async fn connect_to_node() {
         let client = Client::from_env();
-        let version = client.execute_empty::<web3::ClientVersion>().await.unwrap();
+        let version = client.execute_empty(web3::ClientVersion).await.unwrap();
         println!("client version: {version}");
     }
 
@@ -160,14 +149,17 @@ mod tests {
         let client = Client::from_env();
         let domain = Digest::from_slice(
             &client
-                .execute::<eth::Call>((
-                    TransactionCall {
-                        to: Some(address!("0x9008D19f58AAbD9eD0D60971565AA8510560ab41")),
-                        input: Some(hex!("f698da25").to_vec()),
-                        ..Default::default()
-                    },
-                    BlockId::default(),
-                ))
+                .execute(
+                    eth::Call,
+                    (
+                        TransactionCall {
+                            to: Some(address!("0x9008D19f58AAbD9eD0D60971565AA8510560ab41")),
+                            input: Some(hex!("f698da25").to_vec()),
+                            ..Default::default()
+                        },
+                        BlockId::default(),
+                    ),
+                )
                 .await
                 .unwrap(),
         );

@@ -8,6 +8,7 @@ pub mod method;
 mod serialization;
 pub mod types;
 
+use self::types::*;
 #[cfg(feature = "http")]
 pub use url;
 
@@ -29,19 +30,21 @@ module! {
         pub struct BlockNumber as "eth_blockNumber" Empty => U256;
 
         /// Simulates a transaction without adding it to the blockchain.
-        pub struct Call as "eth_call" (TransactionCall, BlockId) => Vec<u8> [internal::Bytes];
+        pub struct Call as "eth_call" (TransactionCall, BlockId) => Vec<u8> [serialization::bytes];
     }
 }
 
 /// Module containing common extentions to the standard Ethereum RPC methods.
 pub mod ext {
+    use crate::{serialization, types::*};
+
     module! {
         /// Extensions to the `eth` namespace.
         pub mod eth {
             /// Simulates a transaction without adding it to the blockchain with
             /// support for state overrides.
             pub struct Call as "eth_call"
-                (TransactionCall, BlockId, StateOverrides) => Vec<u8> [internal::Bytes];
+                (TransactionCall, BlockId, StateOverrides) => Vec<u8> [serialization::bytes];
         }
     }
 }

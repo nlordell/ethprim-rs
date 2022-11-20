@@ -1,12 +1,10 @@
 //! Ethereum RPC types.
 
-pub mod internal;
-
 use crate::serialization;
 use ethprim::AsU256 as _;
 use serde::{
     de::{self, Deserializer},
-    ser::{SerializeSeq as _, Serializer},
+    ser::Serializer,
     Deserialize, Serialize,
 };
 use std::collections::HashMap;
@@ -16,12 +14,22 @@ pub use ethprim::{Address, Digest, I256, U256};
 /// Empty JSON RPC parameters.
 pub struct Empty;
 
+impl<'de> Deserialize<'de> for Empty {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        <[(); 0]>::deserialize(deserializer)?;
+        Ok(Empty)
+    }
+}
+
 impl Serialize for Empty {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_seq(Some(0))?.end()
+        [(); 0].serialize(serializer)
     }
 }
 

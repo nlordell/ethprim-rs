@@ -1,8 +1,9 @@
 //! Module containing serializable JSON RPC data types.
 
+use crate::method::Method;
 use serde::{
     de::{self, Deserializer},
-    Deserialize, Serialize,
+    Deserialize, Serialize, Serializer,
 };
 use serde_json::Value;
 use thiserror::Error;
@@ -21,57 +22,83 @@ pub enum Version {
 /// "SHOULD NOT have fractional parts" rule from the specification.  Since the
 /// ID is set by the client, we shouldn't run into issues where a numerical ID
 /// does not fit into this value or a string ID is used.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, Hash, PartialEq)]
 #[serde(transparent)]
 pub struct Id(pub u32);
 
 /// A request object.
-#[derive(Debug, Serialize)]
-pub struct Request<'a, P> {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Request<M>
+where
+    M: Method,
+{
     pub jsonrpc: Version,
-    pub method: &'a str,
-    pub params: P,
+    pub method: M,
+    #[serde(
+        deserialize_with = "M::deserialize_params",
+        serialize_with = "M::serialize_params"
+    )]
+    pub params: M::Params,
     pub id: Id,
 }
 
 /// Notification object.
-#[derive(Debug, Deserialize)]
-pub struct Notification<P> {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Notification<M>
+where
+    M: Method,
+{
     pub jsonrpc: Version,
-    pub method: String,
-    pub params: P,
+    pub method: M,
+    #[serde(
+        deserialize_with = "M::deserialize_params",
+        serialize_with = "M::serialize_params"
+    )]
+    pub params: M::Params,
 }
 
 /// Response object.
 #[derive(Debug)]
-pub struct Response<R> {
+pub struct Response<M>
+where
+    M: Method,
+{
     pub jsonrpc: Version,
-    pub result: Result<R, Error>,
+    pub result: Result<M::Result, Error>,
     pub id: Option<Id>,
 }
 
-impl<'de, R> Deserialize<'de> for Response<R>
+impl<'de, M> Deserialize<'de> for Response<M>
 where
-    R: Deserialize<'de>,
+    M: Method,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Response<R> {
+        #[serde(transparent)]
+        struct Result<M>(#[serde(deserialize_with = "M::deserialize_result")] M::Result)
+        where
+            M: Method;
+
+        #[derive(Deserialize)]
+        #[serde(bound(deserialize = "M: Method"), deny_unknown_fields)]
+        struct Response<M>
+        where
+            M: Method,
+        {
             jsonrpc: Version,
-            result: Option<R>,
+            result: Option<Result<M>>,
             error: Option<Error>,
             id: Option<Id>,
         }
 
-        let raw = Response::<R>::deserialize(deserializer)?;
+        let raw = Response::<M>::deserialize(deserializer)?;
         Ok(Self {
             jsonrpc: raw.jsonrpc,
             result: match (raw.result, raw.error) {
-                (Some(result), _) => Ok(result),
+                (Some(result), _) => Ok(result.0),
                 (None, Some(error)) => Err(error),
                 (None, None) => return Err(de::Error::custom("missing 'result' or 'error' field")),
             },
@@ -80,8 +107,81 @@ where
     }
 }
 
+impl<M> Serialize for Response<M>
+where
+    M: Method,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        #[serde(transparent)]
+        struct Result<'a, M>(#[serde(serialize_with = "M::serialize_result")] &'a M::Result)
+        where
+            M: Method;
+
+        #[derive(Serialize)]
+        #[serde(bound(serialize = "M: Method"))]
+        struct Response<'a, M>
+        where
+            M: Method,
+        {
+            jsonrpc: Version,
+            result: Option<Result<'a, M>>,
+            error: Option<&'a Error>,
+            id: Option<Id>,
+        }
+
+        let (result, error) = match &self.result {
+            Ok(result) => (Some(Result::<M>(result)), None),
+            Err(error) => (None, Some(error)),
+        };
+        Response {
+            jsonrpc: Version::V2,
+            result,
+            error,
+            id: self.id,
+        }
+        .serialize(serializer)
+    }
+}
+
+mod response {
+    use super::{Error, Id, Version};
+    use crate::method::Method;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize, Serialize)]
+    #[serde(transparent)]
+    pub struct Res<M>(
+        #[serde(
+            deserialize_with = "M::deserialize_result",
+            serialize_with = "M::serialize_result"
+        )]
+        pub M::Result,
+    )
+    where
+        M: Method;
+
+    #[derive(Deserialize, Serialize)]
+    #[serde(
+        bound(deserialize = "M: Method", serialize = "M: Method"),
+        deny_unknown_fields
+    )]
+    pub struct Raw<M>
+    where
+        M: Method,
+    {
+        pub jsonrpc: Version,
+        pub result: Option<Res<M>>,
+        pub error: Option<Error>,
+        pub id: Option<Id>,
+    }
+}
+
 /// An RPC error that may be produced on a response.
-#[derive(Debug, Deserialize, Error)]
+#[derive(Clone, Debug, Deserialize, Error, Serialize)]
 #[error("{code}: {message}")]
 #[serde(deny_unknown_fields)]
 pub struct Error {
@@ -91,8 +191,8 @@ pub struct Error {
 }
 
 /// An error code.
-#[derive(Debug, Deserialize, Error)]
-#[serde(from = "i32")]
+#[derive(Clone, Copy, Debug, Deserialize, Error, Serialize)]
+#[serde(from = "i32", into = "i32")]
 pub enum ErrorCode {
     #[error("parse error")]
     ParseError,
@@ -116,14 +216,29 @@ impl From<i32> for ErrorCode {
     fn from(code: i32) -> Self {
         #[allow(clippy::match_overlapping_arm)]
         match code {
-            -32700 => ErrorCode::ParseError,
-            -32600 => ErrorCode::InvalidRequest,
-            -32601 => ErrorCode::MethodNotFound,
-            -32602 => ErrorCode::InvalidParams,
-            -32603 => ErrorCode::InternalError,
-            -32099..=-32000 => ErrorCode::ServerError(code),
-            -32768..=-32000 => ErrorCode::Reserved(code),
-            _ => ErrorCode::Other(code),
+            -32700 => Self::ParseError,
+            -32600 => Self::InvalidRequest,
+            -32601 => Self::MethodNotFound,
+            -32602 => Self::InvalidParams,
+            -32603 => Self::InternalError,
+            -32099..=-32000 => Self::ServerError(code),
+            -32768..=-32000 => Self::Reserved(code),
+            _ => Self::Other(code),
+        }
+    }
+}
+
+impl From<ErrorCode> for i32 {
+    fn from(code: ErrorCode) -> Self {
+        match code {
+            ErrorCode::ParseError => -32700,
+            ErrorCode::InvalidRequest => -32600,
+            ErrorCode::MethodNotFound => -32601,
+            ErrorCode::InvalidParams => -32602,
+            ErrorCode::InternalError => -32603,
+            ErrorCode::ServerError(code) => code,
+            ErrorCode::Reserved(code) => code,
+            ErrorCode::Other(code) => code,
         }
     }
 }
