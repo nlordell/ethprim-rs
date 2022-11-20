@@ -10,9 +10,11 @@
 #[cfg(feature = "macros")]
 pub use ethaddr::address;
 pub use ethaddr::{Address, ParseAddressError};
+#[cfg(feature = "keccak")]
+pub use ethdigest::Keccak;
 #[cfg(feature = "macros")]
 pub use ethdigest::{digest, keccak};
-pub use ethdigest::{Digest, Keccak, ParseDigestError};
+pub use ethdigest::{Digest, ParseDigestError};
 #[cfg(feature = "macros")]
 pub use ethnum::{int, uint};
 pub use ethnum::{AsI256, AsU256, I256, U256};
