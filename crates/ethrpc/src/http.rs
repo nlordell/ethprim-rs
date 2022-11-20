@@ -5,14 +5,13 @@ use crate::{
     method::Method,
     types::Empty,
 };
-use reqwest::StatusCode;
+use reqwest::{StatusCode, Url};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     env,
     sync::atomic::{AtomicU32, Ordering},
 };
 use thiserror::Error;
-use url::Url;
 
 /// An Ethereum RPC HTTP client.
 pub struct Client {
