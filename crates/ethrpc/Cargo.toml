@@ -28,4 +28,4 @@ thiserror = "1"
 [dev-dependencies]
 ethprim = { version = "0.1", path = "../ethprim", features = ["macros"] }
 tokio = { version = "1", features = ["macros"] }
-hex-literal = "0.3"
+hex-literal = "0.4"
