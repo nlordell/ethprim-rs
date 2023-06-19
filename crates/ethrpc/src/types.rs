@@ -415,6 +415,8 @@ pub struct Withdrawal {
 #[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
+    /// The block hash.
+    pub hash: Digest,
     /// The parent block hash.
     pub parent_hash: Digest,
     /// The Ommer's hash.
@@ -471,6 +473,7 @@ pub struct Block {
 impl Debug for Block {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("Block")
+            .field("hash", &self.hash)
             .field("parent_hash", &self.parent_hash)
             .field("sha3_uncles", &self.sha3_uncles)
             .field("miner", &self.miner)
