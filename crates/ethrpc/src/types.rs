@@ -461,8 +461,7 @@ pub struct Block {
     /// The size of the block.
     pub size: U256,
     /// Block transactions.
-    //pub transactions: BlockTransactions,
-    pub transactions: Vec<SignedTransaction>,
+    pub transactions: BlockTransactions,
     /// Withdrawals.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawals: Option<Vec<Withdrawal>>,
