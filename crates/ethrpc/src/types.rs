@@ -1,13 +1,16 @@
 //! Ethereum RPC types.
 
-use crate::serialization;
+use crate::{bloom::Bloom, debug, serialization};
 use ethprim::AsU256 as _;
 use serde::{
     de::{self, Deserializer},
     ser::Serializer,
     Deserialize, Serialize,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug, Formatter},
+};
 
 pub use ethprim::{Address, Digest, I256, U256};
 
@@ -134,8 +137,368 @@ pub enum BlockTag {
     Pending,
 }
 
-/// An Ethereum transaction call objection.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+/// Transaction information to include with a block.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Hydrated {
+    /// Only fetch transaction hashes for blocks.
+    #[default]
+    No,
+    /// Fetch full transaction data for blocks.
+    Yes,
+}
+
+impl Hydrated {
+    /// Returns the value matching the boolean value used for encoding Ethereum RPC calls for this
+    /// parameter.
+    fn from_bool(value: bool) -> Self {
+        match value {
+            false => Self::No,
+            true => Self::Yes,
+        }
+    }
+
+    /// Returns the boolean value used for encoding Ethereum RPC calls for this
+    /// parameter.
+    fn as_bool(&self) -> bool {
+        match self {
+            Self::No => false,
+            Self::Yes => true,
+        }
+    }
+}
+
+impl Serialize for Hydrated {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.as_bool().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Hydrated {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        bool::deserialize(deserializer).map(Self::from_bool)
+    }
+}
+
+/// A block nonce.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub struct BlockNonce(pub [u8; 8]);
+
+impl Debug for BlockNonce {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_tuple("BlockNonce")
+            .field(&debug::Hex(&self.0))
+            .finish()
+    }
+}
+
+impl Serialize for BlockNonce {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serialization::bytearray::serialize(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for BlockNonce {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serialization::bytearray::deserialize(deserializer).map(Self)
+    }
+}
+
+/// Transactions included in a block.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum BlockTransactions {
+    /// Transaction hashes that were part of a block.
+    Hash(Vec<Digest>),
+    /// Full transaction data.
+    Full(Vec<SignedTransaction>),
+}
+
+/// A signed transaction.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "type")]
+pub enum SignedTransaction {
+    /// Signed legacy transaction.
+    #[serde(rename = "0x0")]
+    Legacy(SignedLegacyTransaction),
+    /// Signed ERC-2930 transaction.
+    #[serde(rename = "0x1")]
+    Erc2930(SignedErc2930Transaction),
+    /// Signed ERC-1559 transaction.
+    #[serde(rename = "0x2")]
+    Erc1559(SignedErc1559Transaction),
+}
+
+/// The signature parity.
+#[derive(Clone, Copy, Debug, Eq, Ord, Hash, PartialEq, PartialOrd, Deserialize, Serialize)]
+pub enum YParity {
+    /// Even parity (0).
+    #[serde(rename = "0x0")]
+    Even = 0,
+    /// Odd parity (1).
+    #[serde(rename = "0x1")]
+    Odd = 1,
+}
+
+/// Signed legacy transaction.
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedLegacyTransaction {
+    /// The transaction nonce.
+    pub nonce: U256,
+    /// The transaction recipient.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<Address>,
+    /// The limit in gas units for the transaction.
+    pub gas: U256,
+    /// The Ether value associated with the transaction.
+    pub value: U256,
+    /// The calldata associated with the transaction.
+    #[serde(with = "serialization::bytes")]
+    pub input: Vec<u8>,
+    /// Gas price willing to be paid by the sender.
+    pub gas_price: U256,
+    /// Chain ID that the transaction is valid on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_id: Option<U256>,
+    /// V
+    pub v: U256,
+    /// R
+    pub r: U256,
+    /// S
+    pub s: U256,
+}
+
+impl Debug for SignedLegacyTransaction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("SignedLegacyTransaction")
+            .field("nonce", &self.nonce)
+            .field("to", &self.to)
+            .field("gas", &self.gas)
+            .field("value", &self.value)
+            .field("input", &debug::Hex(&self.input))
+            .field("gas_price", &self.gas_price)
+            .field("chain_id", &self.chain_id)
+            .field("v", &self.v)
+            .field("r", &self.r)
+            .field("s", &self.s)
+            .finish()
+    }
+}
+
+/// Signed ERC-2930 transaction.
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedErc2930Transaction {
+    /// The transaction nonce.
+    pub nonce: U256,
+    /// The transaction recipient.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<Address>,
+    /// The limit in gas units for the transaction.
+    pub gas: U256,
+    /// The Ether value associated with the transaction.
+    pub value: U256,
+    /// The calldata associated with the transaction.
+    #[serde(with = "serialization::bytes")]
+    pub input: Vec<u8>,
+    /// Gas price willing to be paid by the sender.
+    pub gas_price: U256,
+    /// State access list.
+    pub access_list: AccessList,
+    /// Chain ID that the transaction is valid on.
+    pub chain_id: U256,
+    /// Y parity of the signature.
+    #[serde(alias = "v")]
+    pub y_parity: YParity,
+    /// R
+    pub r: U256,
+    /// S
+    pub s: U256,
+}
+
+impl Debug for SignedErc2930Transaction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("SignedErc2930Transaction")
+            .field("nonce", &self.nonce)
+            .field("to", &self.to)
+            .field("gas", &self.gas)
+            .field("value", &self.value)
+            .field("input", &debug::Hex(&self.input))
+            .field("gas_price", &self.gas_price)
+            .field("access_list", &self.access_list)
+            .field("chain_id", &self.chain_id)
+            .field("y_parity", &self.y_parity)
+            .field("r", &self.r)
+            .field("s", &self.s)
+            .finish()
+    }
+}
+
+/// Signed ERC-1559 transaction.
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignedErc1559Transaction {
+    /// The transaction nonce.
+    pub nonce: U256,
+    /// The transaction recipient.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<Address>,
+    /// The limit in gas units for the transaction.
+    pub gas: U256,
+    /// The Ether value associated with the transaction.
+    pub value: U256,
+    /// The calldata associated with the transaction.
+    #[serde(with = "serialization::bytes")]
+    pub input: Vec<u8>,
+    /// Maximum fee per gas the sender is willing to pay to miners in wei
+    pub max_priority_fee_per_gas: U256,
+    /// The maximum total fee per gas the sender is willing to pay, including
+    /// the network (A.K.A. base) fee and miner (A.K.A priority) fee.
+    pub max_fee_per_gas: U256,
+    /// State access list.
+    pub access_list: AccessList,
+    /// Chain ID that the transaction is valid on.
+    pub chain_id: U256,
+    /// Y parity of the signature.
+    #[serde(alias = "v")]
+    pub y_parity: YParity,
+    /// R
+    pub r: U256,
+    /// S
+    pub s: U256,
+}
+
+impl Debug for SignedErc1559Transaction {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("SignedErc1559Transaction")
+            .field("nonce", &self.nonce)
+            .field("to", &self.to)
+            .field("gas", &self.gas)
+            .field("value", &self.value)
+            .field("input", &debug::Hex(&self.input))
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
+            .field("max_fee_per_gas", &self.max_fee_per_gas)
+            .field("access_list", &self.access_list)
+            .field("chain_id", &self.chain_id)
+            .field("y_parity", &self.y_parity)
+            .field("r", &self.r)
+            .field("s", &self.s)
+            .finish()
+    }
+}
+
+/// A validator withdrawal.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Withdrawal {
+    #[serde(with = "serialization::num")]
+    pub index: u64,
+    #[serde(with = "serialization::num")]
+    pub validator_index: u64,
+    #[serde(with = "serialization::num")]
+    pub amount: u128,
+}
+
+/// An Ethereum block object.
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Block {
+    /// The parent block hash.
+    pub parent_hash: Digest,
+    /// The Ommer's hash.
+    pub sha3_uncles: Digest,
+    /// The coinbase. This is the address that received the block rewards.
+    pub miner: Address,
+    /// The state root.
+    pub state_root: Digest,
+    /// The transactions root.
+    pub transactions_root: Digest,
+    /// The transaction receipts root.
+    pub receipts_root: Digest,
+    /// The log bloom filter.
+    pub logs_bloom: Bloom,
+    /// The difficulty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub difficulty: Option<U256>,
+    /// The block height.
+    pub number: U256,
+    /// The gas limit.
+    pub gas_limit: U256,
+    /// The total gas used by all transactions.
+    pub gas_used: U256,
+    /// The timestamp (in second).
+    pub timestamp: U256,
+    /// Extra data.
+    #[serde(with = "serialization::bytes")]
+    pub extra_data: Vec<u8>,
+    /// The mix hash.
+    pub mix_hash: Digest,
+    /// The nonce.
+    pub nonce: BlockNonce,
+    /// The total difficulty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_difficulty: Option<U256>,
+    /// The base fee per gas.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_fee_per_gas: Option<U256>,
+    /// The withdrawals root.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub withdrawals_root: Option<Digest>,
+    /// The size of the block.
+    pub size: U256,
+    /// Block transactions.
+    //pub transactions: BlockTransactions,
+    pub transactions: Vec<SignedTransaction>,
+    /// Withdrawals.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub withdrawals: Option<Vec<Withdrawal>>,
+    /// Uncle hashes.
+    pub uncles: Vec<Digest>,
+}
+
+impl Debug for Block {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("Block")
+            .field("parent_hash", &self.parent_hash)
+            .field("sha3_uncles", &self.sha3_uncles)
+            .field("miner", &self.miner)
+            .field("state_root", &self.state_root)
+            .field("transactions_root", &self.transactions_root)
+            .field("receipts_root", &self.receipts_root)
+            .field("logs_bloom", &self.logs_bloom)
+            .field("difficulty", &self.difficulty)
+            .field("number", &self.number)
+            .field("gas_limit", &self.gas_limit)
+            .field("gas_used", &self.gas_used)
+            .field("timestamp", &self.timestamp)
+            .field("extra_data", &debug::Hex(&self.extra_data))
+            .field("mix_hash", &self.mix_hash)
+            .field("nonce", &self.nonce)
+            .field("total_difficulty", &self.total_difficulty)
+            .field("base_fee_per_gas", &self.base_fee_per_gas)
+            .field("withdrawals_root", &self.withdrawals_root)
+            .field("size", &self.size)
+            .field("transactions", &self.transactions)
+            .field("withdrawals", &self.withdrawals)
+            .field("uncles", &self.uncles)
+            .finish()
+    }
+}
+
+/// An Ethereum transaction call object.
+#[derive(Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionCall {
     /// The account sending the transaction.
@@ -179,6 +542,25 @@ pub struct TransactionCall {
     pub chain_id: Option<U256>,
 }
 
+impl Debug for TransactionCall {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("TransactionCall")
+            .field("from", &self.from)
+            .field("kind", &self.kind)
+            .field("nonce", &self.nonce)
+            .field("to", &self.to)
+            .field("gas", &self.gas)
+            .field("value", &self.value)
+            .field("input", &self.input.as_deref().map(debug::Hex))
+            .field("gas_price", &self.gas_price)
+            .field("max_priority_fee_per_gas", &self.max_priority_fee_per_gas)
+            .field("max_fee_per_gas", &self.max_fee_per_gas)
+            .field("access_list", &self.access_list)
+            .field("chain_id", &self.chain_id)
+            .finish()
+    }
+}
+
 /// Ethereum transaction kind.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
@@ -187,9 +569,9 @@ pub enum TransactionKind {
     #[default]
     Legacy = 0,
     /// An EIP-2930 transaction type.
-    Eip2930 = 1,
+    Erc2930 = 1,
     /// An EIP-1559 transaction type.
-    Eip1559 = 2,
+    Erc1559 = 2,
 }
 
 impl Serialize for TransactionKind {
@@ -209,8 +591,8 @@ impl<'de> Deserialize<'de> for TransactionKind {
         let value = U256::deserialize(deserializer)?;
         match u8::try_from(value) {
             Ok(0) => Ok(Self::Legacy),
-            Ok(1) => Ok(Self::Eip2930),
-            Ok(2) => Ok(Self::Eip1559),
+            Ok(1) => Ok(Self::Erc2930),
+            Ok(2) => Ok(Self::Erc1559),
             _ => Err(de::Error::custom(format!(
                 "invalid transaction type {value}"
             ))),
@@ -223,6 +605,7 @@ pub type AccessList = Vec<AccessListEntry>;
 
 /// Access list entry.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AccessListEntry {
     /// The address.
     pub address: Address,

@@ -1,5 +1,10 @@
 //! Module containing serializable JSON RPC data types.
 
+use std::{
+    fmt::{self, Formatter},
+    marker::PhantomData,
+};
+
 use crate::method::Method;
 use serde::{
     de::{self, Deserializer},
@@ -77,33 +82,89 @@ where
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(transparent)]
-        struct Result<M>(#[serde(deserialize_with = "M::deserialize_result")] M::Result)
-        where
-            M: Method;
+        #[serde(rename_all = "lowercase")]
+        enum Key {
+            JsonRpc,
+            Result,
+            Error,
+            Id,
+        }
 
-        #[derive(Deserialize)]
-        #[serde(bound(deserialize = "M: Method"), deny_unknown_fields)]
-        struct Response<M>
+        struct Visitor<M>(PhantomData<M>);
+
+        impl<'de, M> de::Visitor<'de> for Visitor<M>
         where
             M: Method,
         {
-            jsonrpc: Version,
-            result: Option<Result<M>>,
-            error: Option<Error>,
-            id: Option<Id>,
+            type Value = Response<M>;
+
+            fn expecting(&self, f: &mut Formatter) -> fmt::Result {
+                f.write_str("JSON RPC response")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: de::MapAccess<'de>,
+            {
+                let mut jsonrpc = None;
+                let mut result = None;
+                let mut error = None;
+                let mut id = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Key::JsonRpc => {
+                            if jsonrpc.is_some() {
+                                return Err(de::Error::duplicate_field("jsonrpc"));
+                            }
+                            jsonrpc = Some(map.next_value()?);
+                        }
+                        Key::Result => {
+                            if result.is_some() {
+                                return Err(de::Error::duplicate_field("result"));
+                            }
+                            result = Some(map.next_value::<MethodResult<M>>()?);
+                        }
+                        Key::Error => {
+                            if error.is_some() {
+                                return Err(de::Error::duplicate_field("error"));
+                            }
+                            error = Some(map.next_value()?);
+                        }
+                        Key::Id => {
+                            if id.is_some() {
+                                return Err(de::Error::duplicate_field("id"));
+                            }
+                            id = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                Ok(Response {
+                    jsonrpc: jsonrpc.ok_or_else(|| de::Error::missing_field("jsonrpc"))?,
+                    result: match (result, error) {
+                        (Some(result), _) => Ok(result.0),
+                        (None, Some(error)) => Err(error),
+                        (None, None) => {
+                            return Err(de::Error::custom("missing 'result' or 'error' field"))
+                        }
+                    },
+                    id,
+                })
+            }
         }
 
-        let raw = Response::<M>::deserialize(deserializer)?;
-        Ok(Self {
-            jsonrpc: raw.jsonrpc,
-            result: match (raw.result, raw.error) {
-                (Some(result), _) => Ok(result.0),
-                (None, Some(error)) => Err(error),
-                (None, None) => return Err(de::Error::custom("missing 'result' or 'error' field")),
-            },
-            id: raw.id,
-        })
+        #[derive(Deserialize)]
+        #[serde(transparent)]
+        struct MethodResult<M>(#[serde(deserialize_with = "M::deserialize_result")] M::Result)
+        where
+            M: Method;
+
+        deserializer.deserialize_struct(
+            "Response",
+            &["jsonrpc", "result", "error", "id"],
+            Visitor::<M>(PhantomData),
+        )
     }
 }
 
@@ -117,7 +178,7 @@ where
     {
         #[derive(Serialize)]
         #[serde(transparent)]
-        struct Result<'a, M>(#[serde(serialize_with = "M::serialize_result")] &'a M::Result)
+        struct MethodResult<'a, M>(#[serde(serialize_with = "M::serialize_result")] &'a M::Result)
         where
             M: Method;
 
@@ -128,13 +189,13 @@ where
             M: Method,
         {
             jsonrpc: Version,
-            result: Option<Result<'a, M>>,
+            result: Option<MethodResult<'a, M>>,
             error: Option<&'a Error>,
             id: Option<Id>,
         }
 
         let (result, error) = match &self.result {
-            Ok(result) => (Some(Result::<M>(result)), None),
+            Ok(result) => (Some(MethodResult::<M>(result)), None),
             Err(error) => (None, Some(error)),
         };
         Response {

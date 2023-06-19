@@ -159,6 +159,6 @@ mod tests {
                 .await
                 .unwrap(),
         );
-        println!("CoW protocol domain separator: {domain}");
+        println!("CoW Protocol domain separator: {domain}");
     }
 }

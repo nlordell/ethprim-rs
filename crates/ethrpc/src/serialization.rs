@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use serde::{Deserialize as _, Deserializer, Serialize as _, Serializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Serialize an `Option<[u8]>`
 pub mod option_bytes {
@@ -41,9 +41,33 @@ pub mod option_bytes {
     }
 }
 
+/// Serialize a fixed size `[u8; N]`.
+pub mod bytearray {
+    use super::{bytes, *};
+    use std::{borrow::Cow, str};
+
+    #[doc(hidden)]
+    pub fn serialize<const N: usize, S>(value: &[u8; N], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        bytes::serialize(value, serializer)
+    }
+
+    #[doc(hidden)]
+    pub fn deserialize<'de, const N: usize, D>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut bytes = [0; N];
+        bytes::decode_into(&Cow::<str>::deserialize(deserializer)?, &mut bytes)?;
+        Ok(bytes)
+    }
+}
+
+/// Serialize a `[u8]`
 pub mod bytes {
     use super::*;
-    use serde::de;
     use std::{borrow::Cow, fmt::Write as _, str};
 
     #[doc(hidden)]
@@ -58,6 +82,16 @@ pub mod bytes {
 
     #[doc(hidden)]
     pub fn decode<E>(hex: &str) -> Result<Vec<u8>, E>
+    where
+        E: de::Error,
+    {
+        let mut bytes = vec![0; (hex.len() / 2).saturating_sub(1)];
+        decode_into(hex, &mut bytes)?;
+        Ok(bytes)
+    }
+
+    #[doc(hidden)]
+    pub fn decode_into<E>(hex: &str, bytes: &mut [u8]) -> Result<(), E>
     where
         E: de::Error,
     {
@@ -78,12 +112,11 @@ pub mod bytes {
             }
         };
 
-        let mut bytes = Vec::with_capacity(hex.len() / 2);
-        for chunk in hex.as_bytes().chunks_exact(2) {
-            bytes.push((nibble(chunk[0])? << 4) + nibble(chunk[1])?);
+        for (byte, chunk) in bytes.iter_mut().zip(hex.as_bytes().chunks_exact(2)) {
+            *byte = (nibble(chunk[0])? << 4) + nibble(chunk[1])?;
         }
 
-        Ok(bytes)
+        Ok(())
     }
 
     #[doc(hidden)]
@@ -102,5 +135,65 @@ pub mod bytes {
         D: Deserializer<'de>,
     {
         Ok(decode(&Cow::<str>::deserialize(deserializer)?)?.into())
+    }
+}
+
+/// Serialize `0x` prefixed hex numbers.
+pub mod num {
+    use super::*;
+    use std::borrow::Cow;
+
+    #[doc(hidden)]
+    pub trait Num: Sized {
+        fn to_hex(&self) -> String;
+        fn from_hex<E>(s: &str) -> Result<Self, E>
+        where
+            E: de::Error;
+    }
+
+    macro_rules! impl_num {
+        ($($t:ty,)*) => {$(
+            impl Num for $t {
+                fn to_hex(&self) -> String {
+                    format!("{self:#x}")
+                }
+
+                fn from_hex<E>(s: &str) -> Result<Self, E>
+                where
+                    E: de::Error,
+                {
+                    let hex = s
+                        .strip_prefix("0x")
+                        .ok_or_else(|| E::custom("missing 0x prefix"))?;
+                    Self::from_str_radix(hex, 16).map_err(E::custom)
+                }
+            }
+        )*};
+    }
+
+    impl_num! {
+        u8,
+        u16,
+        u32,
+        u64,
+        u128,
+    }
+
+    #[doc(hidden)]
+    pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: Num,
+        S: Serializer,
+    {
+        value.to_hex().serialize(serializer)
+    }
+
+    #[doc(hidden)]
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+    where
+        T: Num,
+        D: Deserializer<'de>,
+    {
+        T::from_hex(&Cow::<str>::deserialize(deserializer)?)
     }
 }

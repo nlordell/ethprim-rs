@@ -5,6 +5,8 @@ pub mod http;
 pub mod jsonrpc;
 #[macro_use]
 pub mod method;
+pub mod bloom;
+mod debug;
 mod serialization;
 pub mod types;
 
@@ -35,10 +37,18 @@ module! {
         /// Simulates a transaction without adding it to the blockchain.
         pub struct Call as "eth_call"
             (TransactionCall, BlockId) => Vec<u8> [serialization::bytes];
+
+        /// Returns information about a block by hash.
+        pub struct GetBlockByHash as "eth_getBlockByHash"
+            (Digest, Hydrated) => Option<Block>;
+
+        /// Returns information about a block by number.
+        pub struct GetBlockByNumber as "eth_getBlockByNumber"
+            (BlockSpec, Hydrated) => Option<Block>;
     }
 }
 
-/// Module containing common extentions to the standard Ethereum RPC methods.
+/// Module containing common extensions to the standard Ethereum RPC methods.
 pub mod ext {
     use crate::{serialization, types::*};
 
