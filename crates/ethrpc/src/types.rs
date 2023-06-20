@@ -1,6 +1,6 @@
 //! Ethereum RPC types.
 
-use crate::{bloom::Bloom, debug, serialization};
+use crate::{debug, serialization};
 use ethprim::AsU256 as _;
 use serde::{
     de::{self, Deserializer},
@@ -12,6 +12,8 @@ use std::{
     fmt::{self, Debug, Formatter},
 };
 
+pub use crate::bloom::Bloom;
+pub use arrayvec::ArrayVec;
 pub use ethprim::{Address, Digest, I256, U256};
 
 /// Empty JSON RPC parameters.
@@ -642,4 +644,213 @@ pub struct StateOverride {
     /// storage before executing the call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state_diff: Option<HashMap<U256, U256>>,
+}
+
+/// The blocks to fetch logs for.
+#[derive(Clone, Copy, Debug)]
+pub enum LogBlocks {
+    /// An inclusive block range to include logs for.
+    Range { from: BlockSpec, to: BlockSpec },
+    /// An exact block hash to query logs for. See
+    /// [EIP-234](https://eips.ethereum.org/EIPS/eip-234).
+    Hash(Digest),
+}
+
+impl Default for LogBlocks {
+    fn default() -> Self {
+        Self::Range {
+            from: BlockSpec::default(),
+            to: BlockSpec::default(),
+        }
+    }
+}
+
+/// A value used for filtering logs.
+#[derive(Clone, Debug, Default)]
+pub enum LogFilterValue<T> {
+    /// A filter that accepts all values.
+    #[default]
+    Any,
+    /// A filter that only accepts a single value.
+    Exact(T),
+    /// A filter that accepts any one of the specified values.
+    OneOf(Vec<T>),
+}
+
+impl<T> Serialize for LogFilterValue<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Any => serializer.serialize_unit(),
+            Self::Exact(value) => value.serialize(serializer),
+            Self::OneOf(values) => values.serialize(serializer),
+        }
+    }
+}
+
+impl<'de, T> Deserialize<'de> for LogFilterValue<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Value<T> {
+            Exact(T),
+            OneOf(Vec<T>),
+        }
+
+        match <Option<Value<T>>>::deserialize(deserializer)? {
+            None => Ok(Self::Any),
+            Some(Value::Exact(value)) => Ok(Self::Exact(value)),
+            Some(Value::OneOf(values)) => Ok(Self::OneOf(values)),
+        }
+    }
+}
+
+/// A filter for querying logs from a node.
+#[derive(Clone, Debug, Default)]
+pub struct LogFilter {
+    /// The blocks to fetch logs for.
+    pub blocks: LogBlocks,
+    /// The contract addresses to fetch logs for.
+    pub address: LogFilterValue<Address>,
+    /// The log topics to filter for.
+    pub topics: ArrayVec<LogFilterValue<Digest>, 4>,
+}
+
+impl Serialize for LogFilter {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase", untagged)]
+        enum Value<'a> {
+            Range {
+                from_block: BlockSpec,
+                to_block: BlockSpec,
+                address: &'a LogFilterValue<Address>,
+                topics: &'a [LogFilterValue<Digest>],
+            },
+            Hash {
+                block_hash: Digest,
+                address: &'a LogFilterValue<Address>,
+                topics: &'a [LogFilterValue<Digest>],
+            },
+        }
+
+        let value = match self.blocks {
+            LogBlocks::Range { from, to } => Value::Range {
+                from_block: from,
+                to_block: to,
+                address: &self.address,
+                topics: &self.topics,
+            },
+            LogBlocks::Hash(hash) => Value::Hash {
+                block_hash: hash,
+                address: &self.address,
+                topics: &self.topics,
+            },
+        };
+
+        value.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for LogFilter {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", untagged)]
+        enum Value {
+            Range {
+                from_block: BlockSpec,
+                to_block: BlockSpec,
+                address: LogFilterValue<Address>,
+                topics: ArrayVec<LogFilterValue<Digest>, 4>,
+            },
+            Hash {
+                block_hash: Digest,
+                address: LogFilterValue<Address>,
+                topics: ArrayVec<LogFilterValue<Digest>, 4>,
+            },
+        }
+
+        match Value::deserialize(deserializer)? {
+            Value::Range {
+                from_block,
+                to_block,
+                address,
+                topics,
+            } => Ok(Self {
+                blocks: LogBlocks::Range {
+                    from: from_block,
+                    to: to_block,
+                },
+                address,
+                topics,
+            }),
+            Value::Hash {
+                block_hash,
+                address,
+                topics,
+            } => Ok(Self {
+                blocks: LogBlocks::Hash(block_hash),
+                address,
+                topics,
+            }),
+        }
+    }
+}
+
+/// An Ethereum log.
+#[derive(Clone, Default, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Log {
+    /// Whether or not the log was removed because of a re-org or not.
+    pub removed: bool,
+    /// The index of the log within the block.
+    pub log_index: U256,
+    /// The index of the transaction that emitted this log within the block.
+    pub transaction_index: U256,
+    /// The hash of the transaction that emitted this log.
+    pub transaction_hash: Digest,
+    /// The hash of the block containing the log.
+    pub block_hash: Digest,
+    /// The height of the block containing the log.
+    pub block_number: U256,
+    /// The address of the contract that emitted the log.
+    pub address: Address,
+    /// The data emitted with the log.
+    #[serde(with = "serialization::bytes")]
+    pub data: Vec<u8>,
+    /// The topics emitted with the log.
+    pub topics: ArrayVec<Digest, 4>,
+}
+
+impl Debug for Log {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("Log")
+            .field("removed", &self.removed)
+            .field("log_index", &self.log_index)
+            .field("transaction_index", &self.transaction_index)
+            .field("transaction_hash", &self.transaction_hash)
+            .field("block_hash", &self.block_hash)
+            .field("block_number", &self.block_number)
+            .field("address", &self.address)
+            .field("data", &debug::Hex(&self.data))
+            .field("topics", &self.topics)
+            .finish()
+    }
 }

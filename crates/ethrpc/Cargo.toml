@@ -19,6 +19,7 @@ features = ["http"]
 http = ["reqwest"]
 
 [dependencies]
+arrayvec = { version = "0.7", features = ["serde"] }
 ethprim = { version = "0.1", path = "../ethprim", features = ["serde"] }
 reqwest = { version = "0.11", features = ["json", "native-tls"], optional = true }
 serde = { workspace = true, features = ["derive"] }

@@ -5,7 +5,7 @@ pub mod http;
 pub mod jsonrpc;
 #[macro_use]
 pub mod method;
-pub mod bloom;
+mod bloom;
 mod debug;
 mod serialization;
 pub mod types;
@@ -45,6 +45,10 @@ module! {
         /// Returns information about a block by number.
         pub struct GetBlockByNumber as "eth_getBlockByNumber"
             (BlockSpec, Hydrated) => Option<Block>;
+
+        /// Returns a collection of all logs matching the given filter.
+        pub struct GetLogs as "eth_getLogs"
+            (LogFilter,) => Vec<Log>;
     }
 }
 
