@@ -733,14 +733,16 @@ impl Serialize for LogFilter {
         S: Serializer,
     {
         #[derive(Serialize)]
-        #[serde(rename_all = "camelCase", untagged)]
+        #[serde(untagged)]
         enum Value<'a> {
+            #[serde(rename_all = "camelCase")]
             Range {
                 from_block: BlockSpec,
                 to_block: BlockSpec,
                 address: &'a LogFilterValue<Address>,
                 topics: &'a [LogFilterValue<Digest>],
             },
+            #[serde(rename_all = "camelCase")]
             Hash {
                 block_hash: Digest,
                 address: &'a LogFilterValue<Address>,
@@ -772,14 +774,16 @@ impl<'de> Deserialize<'de> for LogFilter {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase", untagged)]
+        #[serde(untagged)]
         enum Value {
+            #[serde(rename_all = "camelCase")]
             Range {
                 from_block: BlockSpec,
                 to_block: BlockSpec,
                 address: LogFilterValue<Address>,
                 topics: ArrayVec<LogFilterValue<Digest>, 4>,
             },
+            #[serde(rename_all = "camelCase")]
             Hash {
                 block_hash: Digest,
                 address: LogFilterValue<Address>,
