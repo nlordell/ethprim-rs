@@ -116,6 +116,14 @@ macro_rules! method {
         $(#[$attr])*
         $pub struct $type;
 
+        impl ::std::fmt::Debug for $type {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                f.debug_tuple(stringify!($type))
+                    .field(&$name)
+                    .finish()
+            }
+        }
+
         #[allow(unused_imports)]
         impl $crate::method::Method for $type {
             type Params = $params;
