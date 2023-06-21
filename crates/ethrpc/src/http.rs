@@ -1,7 +1,11 @@
 //! HTTP JSON RPC client.
 
 use crate::{
-    jsonrpc::{self, Id, Request, Response, Version},
+    jsonrpc::{
+        self,
+        batch::{self, Batch},
+        Id, Request, Response, Version,
+    },
     method::Method,
     types::Empty,
 };
@@ -99,11 +103,53 @@ impl Client {
     }
 
     /// Executes a JSON RPC method with empty parameters.
-    pub async fn execute_empty<M>(&self, method: M) -> Result<M::Result, ClientError>
+    pub async fn call<M>(&self, method: M) -> Result<M::Result, ClientError>
     where
         M: Method<Params = Empty> + Serialize,
     {
         self.execute::<M>(method, Empty).await
+    }
+
+    /// Executes a JSON RPC batch request.
+    pub async fn batch<B>(&self, batch: B) -> Result<B::Values, ClientError>
+    where
+        B: Batch,
+    {
+        let results = self.try_batch(batch).await?;
+        let values = B::values(results)?;
+        Ok(values)
+    }
+
+    /// Executes a JSON RPC batch request, returning individual JSON RPC results
+    /// for each batched requests. This allows fine-grained error handling
+    /// for individual methods.
+    pub async fn try_batch<B>(&self, batch: B) -> Result<B::Results, ClientError>
+    where
+        B: Batch,
+    {
+        let mut requests = batch.serialize_requests()?;
+        for request in &mut requests {
+            request.id = self.next_id();
+        }
+
+        let mut responses = self.roundtrip::<_, Vec<batch::Response>>(&requests).await?;
+        if responses.len() != requests.len()
+            || responses.iter().any(|response| response.id.is_none())
+        {
+            return Err(ClientError::Batch);
+        }
+
+        responses.sort_unstable_by_key(|response| response.id.unwrap().0);
+        if responses
+            .iter()
+            .zip(requests.iter())
+            .any(|(response, request)| response.id.unwrap() != request.id)
+        {
+            return Err(ClientError::Batch);
+        }
+
+        let results = B::deserialize_responses(responses)?;
+        Ok(results)
     }
 }
 
@@ -118,6 +164,8 @@ pub enum ClientError {
     Status(StatusCode, String),
     #[error("RPC error: {0}")]
     Rpc(#[from] jsonrpc::Error),
+    #[error("batch responses do not match requests")]
+    Batch,
 }
 
 #[cfg(test)]
@@ -125,7 +173,7 @@ mod tests {
     use super::*;
     use crate::{
         eth,
-        types::{BlockId, TransactionCall},
+        types::{BlockId, BlockTag, Empty, Hydrated, TransactionCall},
         web3,
     };
     use ethprim::{address, Digest};
@@ -135,7 +183,7 @@ mod tests {
     #[ignore]
     async fn connect_to_node() {
         let client = Client::from_env();
-        let version = client.execute_empty(web3::ClientVersion).await.unwrap();
+        let version = client.call(web3::ClientVersion).await.unwrap();
         println!("client version: {version}");
     }
 
@@ -160,5 +208,20 @@ mod tests {
                 .unwrap(),
         );
         println!("CoW Protocol domain separator: {domain}");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn batch_request() {
+        let client = Client::from_env();
+        let (latest, safe) = client
+            .batch((
+                (eth::BlockNumber, Empty),
+                (eth::GetBlockByNumber, (BlockTag::Safe.into(), Hydrated::No)),
+            ))
+            .await
+            .unwrap();
+        println!("Latest block: {latest}");
+        println!("Safe block: {}", safe.unwrap().number);
     }
 }

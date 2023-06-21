@@ -1,9 +1,6 @@
 //! Module containing serializable JSON RPC data types.
 
-use std::{
-    fmt::{self, Formatter},
-    marker::PhantomData,
-};
+pub mod batch;
 
 use crate::method::Method;
 use serde::{
@@ -11,6 +8,10 @@ use serde::{
     Deserialize, Serialize, Serializer,
 };
 use serde_json::Value;
+use std::{
+    fmt::{self, Formatter},
+    marker::PhantomData,
+};
 use thiserror::Error;
 
 /// JSON RPC supported version.
