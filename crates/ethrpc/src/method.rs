@@ -206,7 +206,9 @@ macro_rules! module {
 
             $(
                 $crate::method! {
-                    $(#[$ma])* $mv struct $mt as $mn
+                    $(#[$ma])*
+                    #[derive(Clone, Copy, Debug, Default)]
+                    $mv struct $mt as $mn
                         $mp $([$($mpp)*])* => $mr $([$($mrr)*])*;
                 }
             )*
