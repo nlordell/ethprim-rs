@@ -50,7 +50,7 @@ module! {
         pub struct GetLogs as "eth_getLogs"
             (LogFilter,) => Vec<Log>;
 
-        /// Returns code at a given address
+        /// Returns code at a given address.
         pub struct GetCode as "eth_getCode"
             (Address, BlockId) => Vec<u8> [serialization::bytes];
     }
