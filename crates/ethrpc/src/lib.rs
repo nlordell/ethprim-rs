@@ -52,7 +52,7 @@ module! {
 
         /// Returns code at a given address
         pub struct GetCode as "eth_getCode"
-        (Address,) => Option<Vec<u8>>;
+            (Address,) => Option<Vec<u8>> [serialization::bytes];
     }
 }
 
