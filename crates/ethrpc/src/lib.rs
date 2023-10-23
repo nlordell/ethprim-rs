@@ -53,6 +53,19 @@ module! {
         /// Returns code at a given address.
         pub struct GetCode as "eth_getCode"
             (Address, BlockId) => Vec<u8> [serialization::bytes];
+
+        /// Returns information about a transaction by block hash and transaction index position.
+        pub struct GetTransactionByBlockHashAndIndex as "eth_getTransactionByBlockHashAndIndex"
+            (Digest, U256) => Option<SignedTransaction>;
+
+        /// Returns information about a transaction by block number and transaction index position.
+        pub struct GetTransactionByBlockNumberAndIndex as "eth_getTransactionByBlockNumberAndIndex"
+            (BlockId, U256) => Option<SignedTransaction>;
+
+        /// Returns information about a transaction requested by transaction hash.
+        pub struct GetTransactionByHash as "eth_getTransactionByHash"
+            (Digest,) => Option<SignedTransaction>;
+
     }
 }
 
