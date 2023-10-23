@@ -48,11 +48,11 @@ module! {
 
         /// Returns the number of transactions in a block from a block matching the given block hash.
         pub struct GetBlockTransactionCountByHash as "eth_getBlockTransactionCountByHash"
-            (Digest,) => Option<u64>;
+            (Digest,) => Option<U256>;
 
         /// Returns the number of transactions in a block matching the given block number.
         pub struct GetBlockTransactionCountByNumber as "eth_getBlockTransactionCountByNumber"
-            (BlockId,) => Option<u64>;
+            (BlockSpec,) => Option<U256>;
 
         /// Returns code at a given address.
         pub struct GetCode as "eth_getCode"
