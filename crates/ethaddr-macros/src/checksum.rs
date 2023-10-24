@@ -1,1 +1,0 @@
-../../ethaddr/src/checksum.rs

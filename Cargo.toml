@@ -1,7 +1,38 @@
+[package]
+name = "ethprim"
+version = "0.2.0"
+authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
+edition = "2021"
+description = "Ethereum primitive type meta-crate"
+documentation = "https://docs.rs/ethprim"
+readme = "README.md"
+homepage = "https://github.com/nlordell/ethprim-rs"
+repository = "https://github.com/nlordell/ethprim-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["address", "ethereum", "hash", "primitive", "meta"]
+categories = ["cryptography::cryptocurrencies", "no-std"]
+
+[package.metadata.docs.rs]
+features = ["serde", "std"]
+
 [workspace]
-members = ["crates/*"]
-resolver = "2"
+members = [
+  "ethaddr",
+  "ethdigest",
+  "shared",
+]
 
 [workspace.dependencies]
 serde = { version = "1", default-features = false }
 sha3 = { version = "0.10", default-features = false }
+
+[features]
+default = ["std"]
+serde = ["ethaddr/serde", "ethdigest/serde", "ethnum/serde"]
+sha3 = ["ethaddr/sha3", "ethdigest/sha3"]
+std = ["ethaddr/std", "ethdigest/std"]
+
+[dependencies]
+ethaddr = { version = "0.2", path = "./ethaddr", default-features = false }
+ethdigest = { version = "0.3", path = "./ethdigest", default-features = false }
+ethnum = { version = "1", features = ["macros"] }

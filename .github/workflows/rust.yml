@@ -14,18 +14,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Lint
+    - uses: actions/checkout@v4
+    - name: Check
       run: |
         cargo fmt --all -- --check
-        cargo clippy --all-features --all-targets --workspace -- -D warnings
-        cargo test --all-features --workspace
-    - name: No Features
-      run: |
-        for crate in crates/*
-        do
-          pushd $crate
-          cargo clippy --no-default-features --all-targets -- -D warnings
-          cargo test --no-default-features
-          popd
+        for features in --no-default-features --all-features; do
+          cargo clippy $features --all-targets --workspace -- -D warnings
+          cargo test $features --workspace
+        done
+        for features in serde sha3 serde,sha3; do
+          cargo clippy --no-default-features --features $features --all-targets --workspace -- -D warnings
+          cargo test --no-default-features --features $features --workspace
         done
