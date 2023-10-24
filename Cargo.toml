@@ -1,6 +1,6 @@
 [workspace]
-resolver = "2"
 members = ["crates/*"]
+resolver = "2"
 
 [workspace.dependencies]
 serde = { version = "1", default-features = false }
