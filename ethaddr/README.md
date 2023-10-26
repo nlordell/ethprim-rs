@@ -30,7 +30,7 @@ ethaddr = { version = "*", default-features = false }
 
 ```toml
 [dependencies]
-ethaddr = { version = "*", default-features = false, features = ["sha3"] }
+ethaddr = { version = "*", features = ["sha3"] }
 ```
 
 > I want `serde` support!

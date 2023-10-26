@@ -25,17 +25,16 @@ included with the crate.
 ethdigest = { version = "*", default-features = false }
 ```
 
-> I want runtime Keccak-256 hashing utilities!
+> I want to use the Rust-Crypto `sha3` crate for hashing!
 
 ```toml
 [dependencies]
-ethdigest = { version = "*", features = ["keccak"] }
+ethaddr = { version = "*", features = ["sha3"] }
 ```
 
-> I want a macro for compile-time `Digest` literals and compilt-time Keccak-256
-> hash computation, as well as `serde` support!
+> I want `serde` support!
 
 ```toml
 [dependencies]
-ethdigest = { version = "*", features = ["macros", "serde"] }
+ethaddr = { version = "*", features = ["serde"] }
 ```
