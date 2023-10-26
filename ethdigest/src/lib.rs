@@ -33,9 +33,9 @@ use core::{
     str::FromStr,
 };
 
-/// Procedural macro to create Ethereum digest values from string literals that
-/// get parsed at compile time. A compiler error will be generated if an invalid
-/// digest is specified.
+/// Macro to create Ethereum digest values from string literals that get parsed
+/// at compile time. A compiler error will be generated if an invalid digest is
+/// specified.
 ///
 /// # Examples
 ///
@@ -51,7 +51,7 @@ use core::{
 /// }
 /// ```
 ///
-/// The procedural macro generate compile errors on invalid input:
+/// The macro generate compile errors on invalid input:
 ///
 /// ```compile_fail
 /// # use ethdigest::digest;
@@ -65,8 +65,7 @@ macro_rules! digest {
     }};
 }
 
-/// Procedural macro to create Ethereum digest values from compile-time hashed
-/// input.
+/// Macro to create Ethereum digest values from compile-time hashed input.
 ///
 /// # Examples
 ///

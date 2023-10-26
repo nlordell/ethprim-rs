@@ -38,9 +38,9 @@ use core::{
     str::{self, FromStr},
 };
 
-/// Procedural macro to create Ethereum public address values from string
-/// literals that get verified at compile time. A compiler error will be
-/// generated if an invalid address is specified.
+/// Macro to create Ethereum public address values from string literals that get
+/// verified at compile time. A compiler error will be generated if an invalid
+/// address is specified.
 ///
 /// # Examples
 ///
@@ -56,7 +56,7 @@ use core::{
 /// }
 /// ```
 ///
-/// Note that by default, the procedural macro will verify address checksums:
+/// Note that by default, the macro will verify address checksums:
 ///
 /// ```compile_fail
 /// # use ethaddr::address;
