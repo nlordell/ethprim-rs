@@ -98,6 +98,34 @@ pub fn encode<const N: usize, const M: usize>(
     FormattingBuffer(buffer)
 }
 
+/// Encode a byte array into a stack-allocated buffer.
+#[allow(dead_code)]
+pub const fn const_encode<const N: usize, const M: usize>(
+    bytes: &[u8; N],
+    alphabet: Alphabet,
+) -> FormattingBuffer<M> {
+    if 2 + N * 2 != M {
+        panic!("bytes and formatting buffer size mismatch");
+    }
+
+    let mut buffer = [0; M];
+
+    buffer[0] = b'0';
+    buffer[1] = b'x';
+
+    let lut = alphabet.lut();
+    let mut i = 0;
+    while i < N {
+        let byte = bytes[i];
+        let j = i * 2 + 2;
+        buffer[j] = lut[(byte >> 4) as usize];
+        buffer[j + 1] = lut[(byte & 0xf) as usize];
+        i += 1;
+    }
+
+    FormattingBuffer(buffer)
+}
+
 /// A formatting buffer.
 pub struct FormattingBuffer<const N: usize>([u8; N]);
 
@@ -114,16 +142,19 @@ impl<const N: usize> FormattingBuffer<N> {
     }
 
     /// Returns the buffered string.
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         // SAFETY: Buffer should only ever contain a valid UTF-8 string.
         unsafe { str::from_utf8_unchecked(&self.0) }
     }
 
     /// Returns the hex bytes of the buffered string without the 0x prefix.
-    pub fn as_bytes_str(&self) -> &str {
+    pub const fn as_bytes_str(&self) -> &str {
         // SAFETY: Buffer always starts with `0x` prefix, so it is long enough
         // and won't get sliced in the middle of a UTF-8 codepoint.
-        unsafe { self.as_str().get_unchecked(2..) }
+        unsafe {
+            let bytes = slice::from_raw_parts(self.0.as_slice().as_ptr().add(2), N - 2);
+            str::from_utf8_unchecked(bytes)
+        }
     }
 }
 
@@ -137,7 +168,7 @@ pub enum Alphabet {
 
 impl Alphabet {
     /// Returns the nibble lookup-table for the alphabet.
-    fn lut(&self) -> &'static [u8; 16] {
+    const fn lut(&self) -> &'static [u8; 16] {
         match self {
             Alphabet::Lower => b"0123456789abcdef",
             Alphabet::Upper => b"0123456789ABCDEF",

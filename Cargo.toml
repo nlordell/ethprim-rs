@@ -1,6 +1,6 @@
 [package]
 name = "ethprim"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
 edition = "2021"
 description = "Ethereum primitive type meta-crate"
@@ -34,5 +34,5 @@ std = ["ethaddr/std", "ethdigest/std"]
 
 [dependencies]
 ethaddr = { version = "0.2", path = "./ethaddr", default-features = false }
-ethdigest = { version = "0.3", path = "./ethdigest", default-features = false }
+ethdigest = { version = "0.4", path = "./ethdigest", default-features = false }
 ethnum = { version = "1", features = ["macros"] }

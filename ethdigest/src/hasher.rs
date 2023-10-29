@@ -12,23 +12,18 @@ type Impl = crate::keccak::V256;
 ///
 /// # Examples
 ///
-/// A Keccak-256 [`Hasher`] can be used to compute a digest for data in chinks:
+/// A Keccak-256 [`Hasher`] can be used to compute a digest for data in chunks:
 ///
 /// ```
-/// # use ethdigest::{keccak, Digest, Hasher};
+/// # use ethdigest::{keccak, digest, Hasher};
 /// let mut hasher = Hasher::new();
 /// hasher.update("Hello ");
 /// hasher.update("Ethereum!");
 /// let digest = hasher.finalize();
-/// assert_eq!(digest, keccak!("Hello Ethereum!"));
+/// assert_eq!(digest, keccak!(b"Hello Ethereum!"));
 /// assert_eq!(
 ///     digest,
-///     Digest([
-///         0x67, 0xe0, 0x83, 0xfb, 0x08, 0x73, 0x8b, 0x8d,
-///         0x79, 0x84, 0xe3, 0x49, 0x68, 0x7f, 0xec, 0x5b,
-///         0xf0, 0x32, 0x24, 0xc2, 0xda, 0xd4, 0x90, 0x60,
-///         0x20, 0xdf, 0xab, 0x9a, 0x0e, 0x4c, 0xee, 0xac,
-///     ]),
+///     digest!("0x67e083fb08738b8d7984e349687fec5bf03224c2dad4906020dfab9a0e4ceeac"),
 /// );
 /// ```
 ///
@@ -37,22 +32,17 @@ type Impl = crate::keccak::V256;
 /// data or formatted input:
 ///
 /// ```
-/// # use ethdigest::{keccak, Digest, Hasher};
+/// # use ethdigest::{keccak, digest, Hasher};
 /// # fn main() -> std::fmt::Result {
 /// use std::fmt::Write;
 /// let answer = 42;
 /// let mut hasher = Hasher::new();
 /// write!(&mut hasher, "The Answer is {answer}")?;
 /// let digest = hasher.finalize();
-/// assert_eq!(digest, keccak!("The Answer is 42"));
+/// assert_eq!(digest, keccak!(b"The Answer is 42"));
 /// assert_eq!(
 ///     digest,
-///     Digest([
-///         0xf9, 0xd9, 0xf4, 0xd1, 0x55, 0xc9, 0x1f, 0x31,
-///         0x3f, 0x10, 0x4a, 0x6d, 0x5d, 0x01, 0x39, 0x59,
-///         0xdf, 0xa8, 0x19, 0x49, 0x0d, 0xf1, 0x82, 0xa4,
-///         0xbc, 0xda, 0x75, 0x2e, 0xe9, 0x83, 0x3d, 0x5d,
-///     ]),
+///     digest!("0xf9d9f4d155c91f313f104a6d5d013959dfa819490df182a4bcda752ee9833d5d"),
 /// );
 /// # Ok(())
 /// # }

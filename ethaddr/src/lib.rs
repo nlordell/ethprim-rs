@@ -5,21 +5,33 @@
 //!
 //! # Checksums
 //!
-//! Addresses are by default printed with EIP-55 mixed-case checksum encoding.
-//! Addresses checksums may optionally be verified when parsing with
-//! [`Address::from_str_checksum`].
+//! Addresses are by default formatted with [ERC-55] mixed-case checksum
+//! encoding. Addresses checksums may optionally be verified when parsing with
+//! [`Address::from_str_checksum()`].
+//!
+//! # [`address!`] Macro
+//!
+//! This crate exports an [`address!`] macro that can be used for creating
+//! compile-time address constants. Under the hood, it is implemented with
+//! `const fn` and does not use procedural macros.
 //!
 //! # Features
 //!
-//! This crate supports the following features:
 //! - **_default_ `std`**: Additional integration with Rust standard library
-//! types. Notably, this includes `std::error::Error` implementation on the
-//! [`ParseAddressError`] and conversions from `Vec<u8>`.
-//! - **`serde`**: Serialization traits for the [`serde`](::serde) crate. Note
-//! that the implementation is very much geared towards JSON serialiazation with
-//! `serde_json`.
-//! - **`sha3`**: Use the Rust-Crypto Keccak-256 implementation (provided by the
-//! [`sha3`] crate) instead of the built-in one.
+//!   types. Notably, this includes [`std::error::Error`] implementation on the
+//!   [`ParseAddressError`] type and conversions from [`Vec<u8>`].
+//! - **`serde`**: Serialization traits for the [`serde`] crate. Note that the
+//!   implementation is very much geared towards JSON serialization with
+//!   [`serde_json`].
+//! - **`sha3`**: Use the Rust Crypto Keccak-256 implementation (provided by the
+//!   [`sha3`] crate) instead of the built-in one. Note that the [`address!`]
+//!   macro will always use the built-in Keccak-256 implementation for checksum
+//!   verification, as [`sha3`] does not expose a `const fn` API.
+//!
+//! [ERC-55]: https://eips.ethereum.org/EIPS/eip-55
+//! [`serde`]: https://crates.io/crates/serde
+//! [`serde_json`]: https://crates.io/crates/serde_json
+//! [`sha3`]: https://crates.io/crates/sha3
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
@@ -69,13 +81,29 @@ use core::{
 /// # use ethaddr::address;
 /// let _ = address!(~"0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 /// ```
+///
+/// Note that this can be used in `const` contexts, but unfortunately not in
+/// pattern matching contexts:
+///
+/// ```
+/// # use ethaddr::{address, Address};
+/// const ADDRESS: Address = address!("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+/// ```
+///
+/// ```compile_fail
+/// # use ethaddr::{address, Address};
+/// match Address([0xee; 20]) {
+///     address!("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") => println!("matches"),
+///     _ => println!("doesn't match"),
+/// }
+/// ```
 #[macro_export]
 macro_rules! address {
-    ($address:literal) => {{
+    ($address:expr $(,)?) => {{
         const VALUE: $crate::Address = $crate::Address::const_from_str_checksum($address);
         VALUE
     }};
-    (~$address:literal) => {{
+    (~$address:expr $(,)?) => {{
         const VALUE: $crate::Address = $crate::Address::const_from_str($address);
         VALUE
     }};
@@ -98,14 +126,11 @@ impl Address {
     /// Basic usage:
     ///
     /// ```
-    /// # use ethaddr::Address;
+    /// # use ethaddr::{address, Address};
     /// let buffer = (0..255).collect::<Vec<_>>();
     /// assert_eq!(
     ///     Address::from_slice(&buffer[0..20]),
-    ///     Address([
-    ///         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
-    ///         0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13
-    ///     ]),
+    ///     address!("0x000102030405060708090a0b0c0d0e0f10111213"),
     /// );
     /// ```
     pub fn from_slice(slice: &[u8]) -> Self {
@@ -155,17 +180,17 @@ impl Address {
         Ok(Self(bytes))
     }
 
-    /// Same as [`FromStr::from_str`] but as a `const fn`. This method is not
-    /// intended to be used directly but rather through the [`crate::address`]
+    /// Same as [`FromStr::from_str()`] but as a `const fn`. This method is not
+    /// intended to be used directly but rather through the [`address!`]
     /// macro.
     #[doc(hidden)]
     pub const fn const_from_str(src: &str) -> Self {
         Self(hex::const_decode(src))
     }
 
-    /// Same as [`Address::from_str_checksum`] but as a `const fn`. This method
-    /// is not intended to be used directly but rather through the
-    /// [`crate::address`] macro.
+    /// Same as [`Self::from_str_checksum()`] but as a `const fn`. This method
+    /// is not intended to be used directly but rather through the [`address!`]
+    /// macro.
     #[doc(hidden)]
     pub const fn const_from_str_checksum(src: &str) -> Self {
         let Address(addr) = Self::const_from_str(src);

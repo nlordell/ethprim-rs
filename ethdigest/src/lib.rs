@@ -3,23 +3,39 @@
 //! This crate provides a [`Digest`] type for representing an Ethereum 32-byte
 //! digest as well as various Keccak-256 hashing utilities for computing them.
 //!
+//! # Macros
+//!
+//! There are a couple of exported macros for creating compile-time digest
+//! constants:
+//!
+//! - [`digest!`]\: hexadecimal constant
+//! - [`keccak!`]\: compute constant from a pre-image
+//!
+//! Under the hood, they are implemented with `const fn` and do not use
+//! procedural macros.
+//!
 //! # Features
 //!
-//! This crate supports the following features:
 //! - **_default_ `std`**: Additional integration with Rust standard library
-//! types. Notably, this includes `std::error::Error` implementation on the
-//! [`ParseDigestError`] and conversions from `Vec<u8>`.
-//! - **`serde`**: Serialization traits for the [`serde`](::serde) crate. Note
-//! that the implementation is very much geared towards JSON serialization with
-//! `serde_json`.
-//! - **`sha3`**: Use the Rust-Crypto Keccak-256 implementation (provided by the
-//! [`sha3`] crate) instead of the built-in one.
+//!   types. Notably, this includes [`std::error::Error`] implementation on the
+//!   [`ParseDigestError`] and conversions from [`Vec<u8>`].
+//! - **`serde`**: Serialization traits for the [`serde`] crate. Note that the
+//!   implementation is very much geared towards JSON serialization with
+//!   [`serde_json`].
+//! - **`sha3`**: Use the Rust Crypto Keccak-256 implementation (provided by the
+//!   [`sha3`] crate) instead of the built-in one. Note that the [`keccak!`]
+//!   macro will always use the built-in Keccak-256 implementation for computing
+//!   digests, as [`sha3`] does not expose a `const fn` API.
+//!
+//! [`serde`]: https://crates.io/crates/serde
+//! [`serde_json`]: https://crates.io/crates/serde_json
+//! [`sha3`]: https://crates.io/crates/sha3
 
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 
 mod hasher;
 mod hex;
-mod keccak;
+pub mod keccak;
 #[cfg(feature = "serde")]
 mod serde;
 
@@ -57,15 +73,31 @@ use core::{
 /// # use ethdigest::digest;
 /// let _ = digest!("not a valid hex digest literal!");
 /// ```
+///
+/// Note that this can be used in `const` contexts, but unfortunately not in
+/// pattern matching contexts:
+///
+/// ```
+/// # use ethdigest::{digest, Digest};
+/// const DIGEST: Digest = digest!("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20");
+/// ```
+///
+/// ```compile_fail
+/// # use ethdigest::{digest, Digest};
+/// match Digest::of("thing") {
+///     digest!("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20") => println!("matches"),
+///     _ => println!("doesn't match"),
+/// }
+/// ```
 #[macro_export]
 macro_rules! digest {
-    ($digest:literal) => {{
+    ($digest:expr $(,)?) => {{
         const VALUE: $crate::Digest = $crate::Digest::const_from_str($digest);
         VALUE
     }};
 }
 
-/// Macro to create Ethereum digest values from compile-time hashed input.
+/// Macro to create Ethereum digest values for compile-time hashed input.
 ///
 /// # Examples
 ///
@@ -75,13 +107,52 @@ macro_rules! digest {
 /// # use ethdigest::{keccak, Digest};
 /// assert_eq!(
 ///     Digest::of("Hello Ethereum!"),
-///     keccak!("Hello Ethereum!"),
+///     keccak!(b"Hello Ethereum!",),
 /// );
+/// ```
+///
+/// The input can be split into parts:
+///
+/// ```
+/// # use ethdigest::{keccak, Digest};
+/// assert_eq!(
+///     Digest::of("Hello Ethereum!"),
+///     keccak!(b"Hello", b" ", b"Ethereum!"),
+/// );
+/// ```
+///
+/// Note that this can be used in `const` contexts, but unfortunately not in
+/// pattern matching contexts:
+///
+/// ```
+/// # use ethdigest::{keccak, Digest};
+/// const DIGEST: Digest = keccak!(b"I will never change...");
+/// ```
+///
+/// ```compile_fail
+/// # use ethdigest::{keccak, Digest};
+/// match Digest::of("thing") {
+///     keccak!("thing") => println!("matches"),
+///     _ => println!("doesn't match"),
+/// }
+/// ```
+///
+/// Additionally, this can be composed with other macros and constant
+/// expressions:
+///
+/// ```
+/// # use ethdigest::{keccak, Digest};
+/// const FILEHASH: Digest = keccak!(include_bytes!("../README.md"));
+/// const PIHASH: Digest = keccak!(concat!("const PI = ", 3.14).as_bytes());
 /// ```
 #[macro_export]
 macro_rules! keccak {
-    ($data:literal) => {{
+    ($data:expr $(,)?) => {{
         const VALUE: $crate::Digest = $crate::Digest::const_of($data);
+        VALUE
+    }};
+    ($($part:expr),* $(,)?) => {{
+        const VALUE: $crate::Digest = $crate::Digest::const_of_parts(&[$($part),*]);
         VALUE
     }};
 }
@@ -103,16 +174,11 @@ impl Digest {
     /// Basic usage:
     ///
     /// ```
-    /// # use ethdigest::Digest;
+    /// # use ethdigest::{digest, Digest};
     /// let buffer = (0..255).collect::<Vec<_>>();
     /// assert_eq!(
     ///     Digest::from_slice(&buffer[0..32]),
-    ///     Digest([
-    ///         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    ///         0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-    ///         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    ///         0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-    ///     ]),
+    ///     digest!("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
     /// );
     /// ```
     pub fn from_slice(slice: &[u8]) -> Self {
@@ -151,15 +217,10 @@ impl Digest {
     /// Basic usage:
     ///
     /// ```
-    /// # use ethdigest::Digest;
+    /// # use ethdigest::{digest, Digest};
     /// assert_eq!(
     ///     Digest::of("Hello Ethereum!"),
-    ///     Digest([
-    ///         0x67, 0xe0, 0x83, 0xfb, 0x08, 0x73, 0x8b, 0x8d,
-    ///         0x79, 0x84, 0xe3, 0x49, 0x68, 0x7f, 0xec, 0x5b,
-    ///         0xf0, 0x32, 0x24, 0xc2, 0xda, 0xd4, 0x90, 0x60,
-    ///         0x20, 0xdf, 0xab, 0x9a, 0x0e, 0x4c, 0xee, 0xac,
-    ///     ]),
+    ///     digest!("0x67e083fb08738b8d7984e349687fec5bf03224c2dad4906020dfab9a0e4ceeac"),
     /// );
     /// ```
     pub fn of(data: impl AsRef<[u8]>) -> Self {
@@ -168,16 +229,29 @@ impl Digest {
         hasher.finalize()
     }
 
-    /// Same as [`Digest::of`] but as a `const fn`. This method is not intended
-    /// to be used directly but rather through the [`crate::keccak`] macro.
+    /// Same as [`Self::of()`] but as a `const fn`. This method is not intended
+    /// to be used directly but rather through the [`keccak!`] macro.
     #[doc(hidden)]
-    pub const fn const_of(data: &str) -> Self {
-        Self(keccak::v256(data.as_bytes()))
+    pub const fn const_of(data: &[u8]) -> Self {
+        Self(keccak::v256(data))
     }
 
-    /// Same as [`FromStr::from_str`] but as a `const fn`. This method is not
-    /// intended to be used directly but rather through the [`crate::digest`]
+    /// Compute digest by hashing some input split into parts. This method is
+    /// not intended to be used directly but rather through the [`keccak!`]
     /// macro.
+    #[doc(hidden)]
+    pub const fn const_of_parts(parts: &[&[u8]]) -> Self {
+        let mut hasher = keccak::V256::new();
+        let mut i = 0;
+        while i < parts.len() {
+            hasher = hasher.absorb(parts[i]);
+            i += 1;
+        }
+        Self(hasher.squeeze())
+    }
+
+    /// Same as [`FromStr::from_str()`] but as a `const fn`. This method is not
+    /// intended to be used directly but rather through the [`digest!`] macro.
     #[doc(hidden)]
     pub const fn const_from_str(src: &str) -> Self {
         Self(hex::const_decode(src))

@@ -1,7 +1,13 @@
 # Implementation of Ethereum public addresses for Rust.
 
 This crate provides an `Address` type for representing Ethereum public
-addresses.
+addresses. It implements [ERC-55](https://eips.ethereum.org/EIPS/eip-55)
+mixed-case checksum `Display` formatting and parsing with verification using
+`Address::from_str_checksum()`.
+
+Additionally an `address!` macro is included for compile-time verified address
+constants. Under the hood, it is implemented with `const fn` and does not use
+procedural macros.
 
 ## Usage
 
@@ -13,29 +19,3 @@ ethaddr = "*"
 ```
 
 For complete documentation checkout [`docs.rs`](https://docs.rs/ethaddr).
-
-## Features
-
-This crate provides a few features for fine-grained control of what gets
-included with the crate.
-
-> I want `#[no_std]`!
-
-```toml
-[dependencies]
-ethaddr = { version = "*", default-features = false }
-```
-
-> I want to use the Rust-Crypto `sha3` crate for computing address checksums!
-
-```toml
-[dependencies]
-ethaddr = { version = "*", features = ["sha3"] }
-```
-
-> I want `serde` support!
-
-```toml
-[dependencies]
-ethaddr = { version = "*", features = ["serde"] }
-```
