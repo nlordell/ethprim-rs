@@ -107,7 +107,7 @@ macro_rules! digest {
 /// # use ethdigest::{keccak, Digest};
 /// assert_eq!(
 ///     Digest::of("Hello Ethereum!"),
-///     keccak!(b"Hello Ethereum!",),
+///     keccak!(b"Hello Ethereum!"),
 /// );
 /// ```
 ///
