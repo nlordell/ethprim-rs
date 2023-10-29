@@ -33,6 +33,6 @@ sha3 = ["ethaddr/sha3", "ethdigest/sha3"]
 std = ["ethaddr/std", "ethdigest/std"]
 
 [dependencies]
-ethaddr = { version = "0.2", path = "./ethaddr", default-features = false }
-ethdigest = { version = "0.4", path = "./ethdigest", default-features = false }
+ethaddr = { version = "0.2.2", path = "./ethaddr", default-features = false }
+ethdigest = { version = "0.4.0", path = "./ethdigest", default-features = false }
 ethnum = { version = "1", features = ["macros"] }
