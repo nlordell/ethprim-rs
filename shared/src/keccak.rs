@@ -156,7 +156,7 @@ impl V256 {
             while remaining > 0 {
                 debug_assert!(self.pos < Self::RATE);
 
-                let n = if self.pos % N == 0 && remaining >= N {
+                let n = if self.pos.is_multiple_of(N) && remaining >= N {
                     // fast-path: if we are at a 64-bit boundary and have a full
                     // 64-bit word to read.
                     self.s[self.pos / N] ^= ptr.cast::<u64>().read_unaligned().to_le();

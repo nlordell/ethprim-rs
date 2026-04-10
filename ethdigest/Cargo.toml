@@ -1,6 +1,6 @@
 [package]
 name = "ethdigest"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Nicholas Rodrigues Lordello <nlordell@gmail.com>"]
 edition = "2021"
 description = "Ethereum digests and hashing"
@@ -17,7 +17,7 @@ features = ["std", "serde"]
 
 [features]
 default = ["std"]
-std = ["serde?/std", "sha3?/std"]
+std = ["serde?/std"]
 
 [dependencies]
 serde = { workspace = true, optional = true }
